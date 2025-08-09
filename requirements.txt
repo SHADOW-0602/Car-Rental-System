@@ -1,0 +1,14 @@
+express
+mongoose
+bcryptjs
+jsonwebtoken
+cors
+dotenv
+socket.io
+razorpay
+@tensorflow/tfjs-node
+react
+react-dom
+react-router-dom
+axios
+socket.io-client
