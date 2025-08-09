@@ -5,3 +5,4 @@ Thumbs.db
 .idea/
 *.swp
 *.suo
+node_modules/
