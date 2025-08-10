@@ -1,15 +1,21 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import VehicleCard from './VehicleCard';
+import MapPicker from './MapPicker'; // Import the new component
 
 export default function RideBookingForm({ user, onBooking }) {
-  const [pickup, setPickup] = useState({ latitude: '', longitude: '', address: '' });
-  const [drop, setDrop] = useState({ latitude: '', longitude: '', address: '' });
+  const [pickup, setPickup] = useState(null);
+  const [drop, setDrop] = useState(null);
   const [loading, setLoading] = useState(false);
   const [drivers, setDrivers] = useState([]);
+  const [ride, setRide] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!pickup || !drop) {
+      alert('Please select both pickup and drop locations on the map.');
+      return;
+    }
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
@@ -20,81 +26,45 @@ export default function RideBookingForm({ user, onBooking }) {
       );
       setLoading(false);
       setDrivers(res.data.nearbyDrivers || []);
-      if (onBooking) onBooking(res.data.ride, null);
+      setRide(res.data.ride);
     } catch (err) {
       setLoading(false);
       alert(err?.response?.data?.error || 'Booking failed');
     }
   };
 
-  const handleVehicleSelect = (vehicle) => {
-    if (onBooking) onBooking(null, vehicle);
+  const handleVehicleSelect = async (driver) => {
+    if (!ride) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(
+        `${process.env.REACT_APP_API_URL}/rides/confirm`,
+        { rideId: ride._id, driverId: driver.driverId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (onBooking) onBooking(res.data);
+      alert(`Ride confirmed with ${driver.driverId}!`);
+    } catch (err) {
+      alert(err?.response?.data?.error || 'Failed to confirm ride');
+    }
   };
 
   return (
     <div>
       <form className="ride-booking-form" onSubmit={handleSubmit}>
         <h2>Request Ride</h2>
-
-        <label>
-          Pickup Latitude:
-          <input
-            type="number"
-            value={pickup.latitude}
-            onChange={e => setPickup({ ...pickup, latitude: e.target.value })}
-            required
-          />
-        </label>
-
-        <label>
-          Pickup Longitude:
-          <input
-            type="number"
-            value={pickup.longitude}
-            onChange={e => setPickup({ ...pickup, longitude: e.target.value })}
-            required
-          />
-        </label>
-
-        <label>
-          Pickup Address:
-          <input
-            type="text"
-            value={pickup.address}
-            onChange={e => setPickup({ ...pickup, address: e.target.value })}
-            required
-          />
-        </label>
-
-        <label>
-          Drop Latitude:
-          <input
-            type="number"
-            value={drop.latitude}
-            onChange={e => setDrop({ ...drop, latitude: e.target.value })}
-            required
-          />
-        </label>
-
-        <label>
-          Drop Longitude:
-          <input
-            type="number"
-            value={drop.longitude}
-            onChange={e => setDrop({ ...drop, longitude: e.target.value })}
-            required
-          />
-        </label>
-
-        <label>
-          Drop Address:
-          <input
-            type="text"
-            value={drop.address}
-            onChange={e => setDrop({ ...drop, address: e.target.value })}
-            required
-          />
-        </label>
+        
+        <div className="location-pickers" style={{ display: 'flex', gap: '2rem', marginBottom: '1rem' }}>
+          <div style={{ flex: 1 }}>
+            <MapPicker label="Select Pickup Location" onLocationSelect={setPickup} />
+            {pickup && <p><b>Selected:</b> {pickup.address}</p>}
+          </div>
+          <div style={{ flex: 1 }}>
+            <MapPicker label="Select Drop-off Location" onLocationSelect={setDrop} />
+            {drop && <p><b>Selected:</b> {drop.address}</p>}
+          </div>
+        </div>
 
         <button type="submit" disabled={loading}>
           {loading ? 'Searching...' : 'Find Ride'}
@@ -108,7 +78,7 @@ export default function RideBookingForm({ user, onBooking }) {
             <VehicleCard
               key={idx}
               vehicle={{
-                make: 'Unknown',
+                make: 'Available',
                 model: 'Driver Vehicle',
                 vehicle_type: 'economy',
                 fare_per_km: 10,

@@ -1,12 +1,15 @@
 const express = require('express');
 const rideController = require('../controllers/rideController');
-const auth = require('../middleware/auth');
+const auth =require('../middleware/auth');
 const role = require('../middleware/role');
 
 const router = express.Router();
 
 // Request a ride (user)
 router.post('/request', auth, role(['user']), rideController.requestRide);
+
+// Confirm a ride with a driver
+router.post('/confirm', auth, role(['user']), rideController.confirmRide);
 
 // Update ride status (driver or admin)
 router.put('/:id/status', auth, role(['driver', 'admin']), rideController.updateRideStatus);
