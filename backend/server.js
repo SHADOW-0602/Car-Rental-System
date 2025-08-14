@@ -22,6 +22,7 @@ app.use('/api/vehicles', require('./routes/vehicleRoutes'));
 app.use('/api/rides', require('./routes/rideRoutes'));
 app.use('/api/payments', require('./routes/paymentRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
+app.use('/api/admin', require('./routes/adminRoutes'));
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)

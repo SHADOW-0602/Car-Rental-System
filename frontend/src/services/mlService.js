@@ -13,7 +13,7 @@ export async function predictEta(distanceKm, avgSpeedKmh) {
 }
 
 /**
- * Example: Train a simple regression model to map distance to ETA.
+ * Train a simple regression model to map distance to ETA.
  */
 export async function trainExampleModel() {
   const model = tf.sequential();
