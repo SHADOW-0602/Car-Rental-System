@@ -6,7 +6,7 @@ const analyticsService = require('../services/analyticsService');
 const router = express.Router();
 
 // Analytics for admin dashboard
-router.get('/analytics', auth, role(['admin']), async (req, res) => {
+router.get('/analytics', auth, async (req, res) => {
   try {
     const stats = await analyticsService.getDailyStats();
     res.json(stats);

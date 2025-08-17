@@ -1,6 +1,7 @@
 import React from 'react';
 import Navbar from '../components/Navbar';
 import { useAnalyticsContext } from '../context/AnalyticsContext';
+import '../styles/main.css';
 
 export default function AnalyticsDashboard({ user }) {
   const { stats } = useAnalyticsContext();

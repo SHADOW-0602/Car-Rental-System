@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import axios from 'axios';
 import socket from '../services/socket';
+import config from '../config';
 
 const AnalyticsContext = createContext();
 
@@ -11,12 +12,25 @@ export function AnalyticsProvider({ children }) {
     async function fetchStats() {
       try {
         const token = localStorage.getItem('token');
+        if (!token) {
+          console.log('No authentication token found');
+          return;
+        }
+        
         const res = await axios.get(
-          `${process.env.REACT_APP_API_URL}/admin/analytics`,
+          `${config.API_BASE_URL}/admin/analytics`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         setStats(res.data);
       } catch (err) {
+        console.error('Analytics fetch error:', err.response?.status, err.response?.data);
+        if (err.response?.status === 400) {
+          console.log('Bad request - likely authentication or permission issue');
+        } else if (err.response?.status === 401) {
+          console.log('Unauthorized - invalid token');
+        } else if (err.response?.status === 403) {
+          console.log('Forbidden - insufficient permissions');
+        }
         setStats(null);
       }
     }

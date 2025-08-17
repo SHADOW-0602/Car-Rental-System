@@ -1,6 +1,7 @@
 import React from 'react';
 import Navbar from '../components/Navbar';
 import AnalyticsWidget from '../components/AnalyticsWidget';
+import '../styles/main.css';
 
 export default function AdminDashboard({ user }) {
   return (

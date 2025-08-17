@@ -1,39 +1,58 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import config from '../config';
+import CookieManager from '../utils/cookieManager';
 
 export default function useAuth() {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token') || null);
-  const [loading, setLoading] = useState(false);
-
-  // Load profile on mount if token exists
+  const [token, setToken] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  // Initialize from session on mount
   useEffect(() => {
-    if (token) {
-      fetchProfile();
+    const session = CookieManager.getUserSession();
+    if (session.token && session.user) {
+      setToken(session.token);
+      setUser(session.user);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+    setLoading(false);
+  }, []);
 
-  const fetchProfile = async () => {
+  const logout = useCallback(() => {
+    CookieManager.clearUserSession();
+    setToken(null);
+    setUser(null);
+  }, []);
+
+  const fetchProfile = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${process.env.REACT_APP_API_URL}/users/profile`, {
+      const res = await axios.get(`${config.API_BASE_URL}/users/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUser(res.data);
     } catch (err) {
       console.error('Profile fetch error', err);
-      logout();
+      // Don't call logout here to avoid circular dependency
+      setToken(null);
+      setUser(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
+
+  // Load profile when token changes (but not on initial mount)
+  useEffect(() => {
+    if (token && !user) {
+      fetchProfile();
+    }
+  }, [token, user, fetchProfile]);
 
   const login = async (email, password) => {
     try {
       setLoading(true);
-      const res = await axios.post(`${process.env.REACT_APP_API_URL}/users/login`, { email, password });
-      localStorage.setItem('token', res.data.token);
+      const res = await axios.post(`${config.API_BASE_URL}/users/login`, { email, password });
+      CookieManager.setUserSession(res.data.token, res.data.user);
       setToken(res.data.token);
       setUser(res.data.user);
       return true;
@@ -48,7 +67,7 @@ export default function useAuth() {
   const register = async (formData) => {
     try {
       setLoading(true);
-      const res = await axios.post(`${process.env.REACT_APP_API_URL}/users/register`, formData);
+      const res = await axios.post(`${config.API_BASE_URL}/users/register`, formData);
       return res.data;
     } catch (err) {
       console.error('Registration failed', err);
@@ -57,11 +76,7 @@ export default function useAuth() {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
-    setUser(null);
-  };
+
 
   return { user, token, loading, login, register, logout };
 }

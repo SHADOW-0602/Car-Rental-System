@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import socket from '../services/socket';
+import '../styles/main.css';
 
 export default function NotificationBanner() {
   const [notification, setNotification] = useState('');

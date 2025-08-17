@@ -33,6 +33,8 @@ function initSocket(server) {
             console.log(`❌ User disconnected: ${socket.id}`);
         });
     });
+
+    return io;
 }
 
 module.exports = { initSocket };

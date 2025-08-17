@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import Navbar from '../components/Navbar';
+import config from '../config';
+import '../styles/main.css';
 
 export default function CarDetails({ user }) {
   const { id } = useParams();
@@ -11,7 +13,7 @@ export default function CarDetails({ user }) {
     async function fetchVehicle() {
       try {
         const token = localStorage.getItem('token');
-        const res = await axios.get(`${process.env.REACT_APP_API_URL}/vehicles/${id}`, {
+        const res = await axios.get(`${config.API_BASE_URL}/vehicles/${id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         setVehicle(res.data);

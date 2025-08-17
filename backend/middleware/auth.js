@@ -1,17 +1,35 @@
-// Middleware: JWT Authentication
-const jwt = require('jsonwebtoken');
+const { validateSession } = require('./sessionManager');
+const { sanitizeOutput } = require('./dataEncryption');
 
-module.exports = (req, res, next) => {
+// Enhanced authentication with session management
+module.exports = async (req, res, next) => {
     try {
-        const token = req.header('Authorization')?.replace('Bearer ', '');
-        if (!token) {
-            return res.status(401).json({ error: 'Access denied. No token provided.' });
-        }
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded;
-        next();
-    } catch (err) {
-        console.error('JWT verification failed:', err);
-        res.status(400).json({ error: 'Invalid token' });
+        await validateSession(req, res, next);
+    } catch (error) {
+        res.status(401).json({ 
+            success: false, 
+            error: 'Authentication failed',
+            code: 'AUTH_FAILED'
+        });
     }
+};
+
+// Middleware to sanitize response data based on user role
+module.exports.sanitizeResponse = (req, res, next) => {
+    const originalSend = res.send;
+    
+    res.send = function(data) {
+        if (req.user && data) {
+            try {
+                const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+                const sanitized = sanitizeOutput(parsed, req.user.role);
+                return originalSend.call(this, JSON.stringify(sanitized));
+            } catch (error) {
+                return originalSend.call(this, data);
+            }
+        }
+        return originalSend.call(this, data);
+    };
+    
+    next();
 };

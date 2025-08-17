@@ -1,0 +1,8 @@
+driver_001,28.6139,77.2090,Connaught Place Delhi,sedan,available,2025-01-15T10:30:00
+driver_002,28.6289,77.2184,Karol Bagh Delhi,hatchback,available,2025-01-15T10:31:00
+driver_003,28.6562,77.2410,India Gate Delhi,suv,busy,2025-01-15T10:32:00
+driver_004,28.6400,77.2200,Rajouri Garden Delhi,sedan,available,2025-01-15T10:33:00
+driver_005,28.5355,77.3910,Noida Sector 18,hatchback,available,2025-01-15T10:34:00
+driver_006,28.4595,77.0266,Gurgaon Cyber City,suv,available,2025-01-15T10:35:00
+driver_007,28.6692,77.4538,Laxmi Nagar Delhi,sedan,available,2025-01-15T10:36:00
+driver_008,28.7041,77.1025,Rohini Delhi,hatchback,offline,2025-01-15T10:37:00

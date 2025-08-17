@@ -1,0 +1,12 @@
+specVersion: "v1"
+serviceId: "Car-Rental-System"
+location: "asia-east1"
+schema:
+  source: "./schema"
+  datasource:
+    postgresql:
+      database: "fdcdb"
+      cloudSql:
+        instanceId: "car-rental-system-fdc"
+      # schemaValidation: "COMPATIBLE"
+connectorDirs: ["./connector"]
