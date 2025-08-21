@@ -1,13 +1,21 @@
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import CookieManager from '../utils/cookieManager';
 import '../styles/main.css';
+import { slideDown, staggerContainer, staggerItem } from '../animations/variants';
+import { AnimatedButton } from '../animations/AnimatedComponents';
 
 export default function Navbar({ user }) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   return (
-    <nav className="navbar">
+    <motion.nav 
+      className="navbar"
+      variants={slideDown}
+      initial="hidden"
+      animate="visible"
+    >
       {/* Left Section - Logo */}
       <div>
         <Link to="/" className="navbar-logo">
@@ -18,28 +26,35 @@ export default function Navbar({ user }) {
         </Link>
       </div>
 
-      {/* Center Section - Navigation Links */}
+      {/* Center Section - Role-based Navigation */}
       <div className="navbar-center">
-        <Link to="/" className="navbar-link">
-          🏠 Home
-        </Link>
+        {/* No navigation links for non-signed users */}
         
-        <Link to="/vehicles" className="navbar-link">
-          🚙 Vehicles
-        </Link>
+        {user?.role === 'user' && (
+          <>
+            <Link to="/user/portal" className="navbar-link">🏠 Dashboard</Link>
+            <Link to="/vehicles" className="navbar-link">🚙 Find Rides</Link>
+            <Link to="/bookings" className="navbar-link">📋 My Rides</Link>
+            <Link to="/contact" className="navbar-link">📞 Support</Link>
+          </>
+        )}
         
-        <Link to="/bookings" className="navbar-link">
-          📋 Your Rides
-        </Link>
-        
-        <Link to="/contact" className="navbar-link">
-          📞 Contact Us
-        </Link>
+        {user?.role === 'driver' && (
+          <>
+            <Link to="/driver/portal" className="navbar-link">🏠 Dashboard</Link>
+            <Link to="/driver/rides" className="navbar-link">🚗 My Rides</Link>
+            <Link to="/driver/earnings" className="navbar-link">💰 Earnings</Link>
+            <Link to="/contact" className="navbar-link">📞 Support</Link>
+          </>
+        )}
         
         {user?.role === 'admin' && (
-          <Link to="/admin" className="navbar-link navbar-admin">
-            👑 Admin
-          </Link>
+          <>
+            <Link to="/admin/portal" className="navbar-link">🏠 Dashboard</Link>
+            <Link to="/admin/analytics" className="navbar-link">📊 Analytics</Link>
+            <Link to="/admin/users" className="navbar-link">👥 Users</Link>
+            <Link to="/admin/chat" className="navbar-link">💬 Support</Link>
+          </>
         )}
       </div>
 
@@ -47,13 +62,9 @@ export default function Navbar({ user }) {
       <div className="navbar-auth">
         {!user ? (
           <>
-            <Link to="/login" className="auth-btn login">
-              🔑 Login
-            </Link>
-            
-            <Link to="/signup" className="auth-btn signup">
-              ✨ Sign Up
-            </Link>
+            <Link to="/login" className="auth-btn login">🔑 Login</Link>
+            <Link to="/signup" className="auth-btn signup">✨ Sign Up</Link>
+            <Link to="/driver/register" className="auth-btn driver-signup">🚕 Drive & Earn</Link>
           </>
         ) : (
           <div className="user-dropdown">
@@ -138,7 +149,7 @@ export default function Navbar({ user }) {
                 ❓ Help & Support
               </Link>
               
-              <button
+              <AnimatedButton
                 onClick={() => {
                   CookieManager.clearUserSession();
                   window.location.href = '/';
@@ -146,11 +157,11 @@ export default function Navbar({ user }) {
                 className="dropdown-item logout"
               >
                 🚪 Logout
-              </button>
+              </AnimatedButton>
             </div>
           </div>
         )}
       </div>
-    </nav>
+    </motion.nav>
   );
 }

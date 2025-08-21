@@ -1,11 +1,11 @@
 import React from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 
 import { AuthProvider, useAuthContext } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { AnalyticsProvider } from './context/AnalyticsContext';
 
-import Home from './pages/Home';
 import CarList from './pages/CarList';
 import CarDetails from './pages/CarDetails';
 import Bookings from './pages/Bookings';
@@ -14,6 +14,8 @@ import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import SimpleLogin from './components/SimpleLogin';
 import SignupForm from './components/SignupForm';
 import DriverRegister from './pages/DriverRegister';
+import DriverEarnings from './pages/DriverEarnings';
+import DriverRides from './pages/DriverRides';
 import Contact from './pages/Contact';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
@@ -22,6 +24,7 @@ import AdminChat from './pages/AdminChat';
 import UserPortal from './pages/UserPortal';
 import DriverPortal from './pages/DriverPortal';
 import AdminPortal from './pages/AdminPortal';
+import AdminUsers from './pages/AdminUsers';
 import ProtectedRoute from './components/ProtectedRoute';
 
 import NotificationBanner from './components/NotificationBanner';
@@ -30,7 +33,35 @@ import CookieConsent from './components/CookieConsent';
 import './utils/errorHandler'; // Initialize global error handlers
 
 function AppRoutes() {
-  const { user } = useAuthContext();
+  const { user, loading } = useAuthContext();
+  
+  if (loading) {
+    return (
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}
+      >
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          style={{ fontSize: '2rem' }}
+        >
+          🚗
+        </motion.div>
+      </motion.div>
+    );
+  }
+  
+  const getDashboardRoute = () => {
+    if (!user) return '/dashboard';
+    switch (user.role) {
+      case 'admin': return '/admin/portal';
+      case 'driver': return '/driver/portal';
+      case 'user': return '/user/portal';
+      default: return '/dashboard';
+    }
+  };
   
   return (
     <Router>
@@ -38,17 +69,46 @@ function AppRoutes() {
       <CookieConsent />
       <ErrorBoundary>
         <Routes>
-          <Route path="/" element={<Home user={user} />} />
+          <Route path="/" element={<Navigate to={getDashboardRoute()} replace />} />
+          <Route path="/dashboard" element={<UserPortal user={user} />} />
           <Route path="/login" element={<SimpleLogin />} />
           <Route path="/signup" element={<SignupForm />} />
           <Route path="/driver/register" element={<DriverRegister />} />
-          <Route path="/vehicles" element={<CarList />} />
-          <Route path="/vehicles/:id" element={<CarDetails />} />
-          <Route path="/bookings" element={<Bookings />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/help" element={<Help />} />
+          <Route path="/vehicles" element={
+            <ProtectedRoute allowedRoles={['user', 'admin']}>
+              <CarList />
+            </ProtectedRoute>
+          } />
+          <Route path="/vehicles/:id" element={
+            <ProtectedRoute allowedRoles={['user', 'admin']}>
+              <CarDetails />
+            </ProtectedRoute>
+          } />
+          <Route path="/bookings" element={
+            <ProtectedRoute allowedRoles={['user', 'admin']}>
+              <Bookings />
+            </ProtectedRoute>
+          } />
+          <Route path="/contact" element={
+            <ProtectedRoute allowedRoles={['user', 'driver', 'admin']}>
+              <Contact />
+            </ProtectedRoute>
+          } />
+          <Route path="/profile" element={
+            <ProtectedRoute allowedRoles={['user', 'driver', 'admin']}>
+              <Profile />
+            </ProtectedRoute>
+          } />
+          <Route path="/settings" element={
+            <ProtectedRoute allowedRoles={['user', 'driver', 'admin']}>
+              <Settings />
+            </ProtectedRoute>
+          } />
+          <Route path="/help" element={
+            <ProtectedRoute allowedRoles={['user', 'driver', 'admin']}>
+              <Help />
+            </ProtectedRoute>
+          } />
           <Route path="/admin" element={
             <ProtectedRoute allowedRoles={['admin']}>
               <AdminDashboard />
@@ -74,9 +134,24 @@ function AppRoutes() {
               <DriverPortal />
             </ProtectedRoute>
           } />
+          <Route path="/driver/rides" element={
+            <ProtectedRoute allowedRoles={['driver']}>
+              <DriverRides />
+            </ProtectedRoute>
+          } />
+          <Route path="/driver/earnings" element={
+            <ProtectedRoute allowedRoles={['driver']}>
+              <DriverEarnings />
+            </ProtectedRoute>
+          } />
           <Route path="/admin/portal" element={
             <ProtectedRoute allowedRoles={['admin']}>
               <AdminPortal />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/users" element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminUsers />
             </ProtectedRoute>
           } />
         </Routes>

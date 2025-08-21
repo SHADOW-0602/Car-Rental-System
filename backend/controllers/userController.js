@@ -51,6 +51,7 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
     try {
         const { email, password, secretKey } = req.body;
+        console.log(`[LOGIN] Attempt for email: ${email?.substring(0, 3)}***`);
         
         // Check admin login first
         const admin = await Admin.findOne({ email });
@@ -137,7 +138,7 @@ exports.login = async (req, res) => {
         }
         
         console.warn(`[SECURITY] Login attempt with non-existent email: ${maskSensitiveData({email}).email} - IP: ${req.ip}`);
-        return res.status(404).json({ success: false, error: 'Invalid credentials' });
+        return res.status(401).json({ success: false, error: 'Invalid credentials' });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
     }
@@ -175,6 +176,40 @@ exports.updateProfile = async (req, res) => {
             user = await User.findByIdAndUpdate(req.user.id, updates, { new: true });
         }
         res.json({ success: true, user: sanitizeOutput(user, req.user.role) });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+exports.changePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        
+        let user;
+        if (req.user.role === 'admin') {
+            user = await Admin.findById(req.user.id);
+        } else if (req.user.role === 'driver') {
+            user = await Driver.findById(req.user.id);
+        } else {
+            user = await User.findById(req.user.id);
+        }
+        
+        const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+        if (!isCurrentPasswordValid) {
+            return res.status(400).json({ success: false, error: 'Current password is incorrect' });
+        }
+        
+        const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+        
+        if (req.user.role === 'admin') {
+            await Admin.findByIdAndUpdate(req.user.id, { password: hashedNewPassword });
+        } else if (req.user.role === 'driver') {
+            await Driver.findByIdAndUpdate(req.user.id, { password: hashedNewPassword });
+        } else {
+            await User.findByIdAndUpdate(req.user.id, { password: hashedNewPassword });
+        }
+        
+        res.json({ success: true, message: 'Password changed successfully' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -225,6 +260,25 @@ exports.getSessions = async (req, res) => {
     try {
         const sessions = SessionManager.getUserSessions(req.user.id);
         res.json({ success: true, sessions });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+exports.checkEmail = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const [existingUser, existingDriver, existingAdmin] = await Promise.all([
+            User.findOne({ email }),
+            Driver.findOne({ email }),
+            Admin.findOne({ email })
+        ]);
+        
+        if (existingUser || existingDriver || existingAdmin) {
+            return res.json({ exists: true });
+        }
+        
+        return res.status(404).json({ exists: false });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

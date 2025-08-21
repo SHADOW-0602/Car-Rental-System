@@ -116,7 +116,7 @@ app.use('*', (req, res) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT;
 server.listen(PORT, () => {
     logger.info(`🚗 Car Rental API started on port ${PORT}`);
     console.log(`🚗 Car Rental API running on port ${PORT}`);

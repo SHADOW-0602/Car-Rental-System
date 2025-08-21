@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuthContext } from '../context/AuthContext';
 import config from '../config';
 import CookieManager from '../utils/cookieManager';
 import '../styles/main.css';
 
 export default function SimpleLogin({ onLogin }) {
   const navigate = useNavigate();
+  const { updateAuthState } = useAuthContext();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [secretKey, setSecretKey] = useState('');
@@ -37,14 +39,23 @@ export default function SimpleLogin({ onLogin }) {
       // Store session using cookie manager
       CookieManager.setUserSession(res.data.token, res.data.user);
       
+      // Update auth context immediately
+      updateAuthState(res.data.token, res.data.user);
+      
       console.log('✅ Login successful!');
       
       if (onLogin) {
         onLogin(res.data.user, res.data.token);
       }
       
-      // Reload page to refresh auth context
-      window.location.href = '/';
+      // Navigate based on user role
+      if (res.data.user.role === 'admin') {
+        navigate('/admin/portal');
+      } else if (res.data.user.role === 'driver') {
+        navigate('/driver/portal');
+      } else {
+        navigate('/user/portal');
+      }
       
     } catch (err) {
       console.error('❌ Login failed:', err.response?.data);

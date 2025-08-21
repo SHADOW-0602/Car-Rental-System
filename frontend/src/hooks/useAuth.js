@@ -11,14 +11,19 @@ export default function useAuth() {
   // Initialize from session on mount
   useEffect(() => {
     const session = CookieManager.getUserSession();
+    console.log('🔍 Session check on mount:', { hasToken: !!session.token, hasUser: !!session.user });
     if (session.token && session.user) {
       setToken(session.token);
       setUser(session.user);
+      console.log('✅ Session restored:', session.user.role);
+    } else {
+      console.log('❌ No valid session found');
     }
     setLoading(false);
   }, []);
 
   const logout = useCallback(() => {
+    console.log('🚪 Logging out and clearing session');
     CookieManager.clearUserSession();
     setToken(null);
     setUser(null);
@@ -48,21 +53,42 @@ export default function useAuth() {
     }
   }, [token, user, fetchProfile]);
 
-  const login = async (email, password) => {
+  const login = async (email, password, secretKey) => {
     try {
       setLoading(true);
-      const res = await axios.post(`${config.API_BASE_URL}/users/login`, { email, password });
+      const payload = { email, password };
+      if (secretKey) payload.secretKey = secretKey;
+      
+      const res = await axios.post(`${config.API_BASE_URL}/users/login`, payload);
+      
+      if (res.data.requiresSecretKey) {
+        return { requiresSecretKey: true };
+      }
+      
+      console.log('💾 Saving session:', res.data.user.role);
       CookieManager.setUserSession(res.data.token, res.data.user);
       setToken(res.data.token);
       setUser(res.data.user);
-      return true;
+      
+      // Verify session was saved
+      const savedSession = CookieManager.getUserSession();
+      console.log('✅ Session verification:', { saved: !!savedSession.token });
+      
+      return { success: true, user: res.data.user };
     } catch (err) {
       console.error('Login failed', err);
-      return false;
+      return { success: false, error: err.response?.data?.error || 'Login failed' };
     } finally {
       setLoading(false);
     }
   };
+
+  const updateAuthState = (token, user) => {
+    setToken(token);
+    setUser(user);
+  };
+
+
 
   const register = async (formData) => {
     try {
@@ -78,5 +104,5 @@ export default function useAuth() {
 
 
 
-  return { user, token, loading, login, register, logout };
+  return { user, token, loading, login, register, logout, updateAuthState };
 }

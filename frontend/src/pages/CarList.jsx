@@ -2,10 +2,12 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import VehicleCard from '../components/VehicleCard';
 import Navbar from '../components/Navbar';
+import { useAuthContext } from '../context/AuthContext';
 import config from '../config';
 import '../styles/main.css';
 
-export default function CarList({ user }) {
+export default function CarList() {
+  const { user } = useAuthContext();
   const [vehicles, setVehicles] = useState([]);
 
   useEffect(() => {

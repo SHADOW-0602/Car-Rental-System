@@ -294,8 +294,16 @@ export default function MapPicker({ onLocationSelect, label, autoGetUserLocation
               type="text"
               value={searchQuery}
               onChange={handleInputChange}
-              onFocus={handleInputFocus}
-              onBlur={handleInputBlur}
+              onFocus={(e) => {
+                e.target.style.borderColor = '#667eea';
+                e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05)';
+                handleInputFocus(e);
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = '#e2e8f0';
+                e.target.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.05)';
+                handleInputBlur(e);
+              }}
               onKeyPress={handleKeyPress}
               placeholder={isGettingLocation ? "Getting your location..." : "Search for a location..."}
               disabled={isGettingLocation}
@@ -309,14 +317,6 @@ export default function MapPicker({ onLocationSelect, label, autoGetUserLocation
                 boxShadow: '0 4px 6px rgba(0, 0, 0, 0.05)',
                 transition: 'all 0.3s ease',
                 outline: 'none'
-              }}
-              onFocus={(e) => {
-                e.target.style.borderColor = '#667eea';
-                e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05)';
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = '#e2e8f0';
-                e.target.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.05)';
               }}
             />
             

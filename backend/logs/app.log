@@ -25,3 +25,70 @@
 {"timestamp":"2025-08-16T12:25:04.327Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":3000}}
 {"timestamp":"2025-08-17T08:57:10.880Z","level":"INFO","message":"🚗 Car Rental API started on port 3000"}
 {"timestamp":"2025-08-17T08:57:11.832Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-17T09:13:21.302Z","level":"WARN","message":"[404] Route not found: GET /api/admin/users"}
+{"timestamp":"2025-08-17T09:13:21.319Z","level":"WARN","message":"[404] Route not found: GET /api/admin/drivers"}
+{"timestamp":"2025-08-17T09:13:21.326Z","level":"WARN","message":"[404] Route not found: GET /api/admin/users"}
+{"timestamp":"2025-08-17T09:13:21.330Z","level":"WARN","message":"[404] Route not found: GET /api/admin/complaints"}
+{"timestamp":"2025-08-17T09:13:21.334Z","level":"WARN","message":"[404] Route not found: GET /api/admin/trips"}
+{"timestamp":"2025-08-17T09:13:21.336Z","level":"WARN","message":"[404] Route not found: GET /api/admin/drivers"}
+{"timestamp":"2025-08-17T09:13:21.344Z","level":"WARN","message":"[404] Route not found: GET /api/admin/complaints"}
+{"timestamp":"2025-08-17T09:13:21.347Z","level":"WARN","message":"[404] Route not found: GET /api/admin/trips"}
+{"timestamp":"2025-08-17T09:13:31.452Z","level":"WARN","message":"[404] Route not found: GET /api/admin/users"}
+{"timestamp":"2025-08-17T09:13:31.468Z","level":"WARN","message":"[404] Route not found: GET /api/admin/users"}
+{"timestamp":"2025-08-17T09:13:31.471Z","level":"WARN","message":"[404] Route not found: GET /api/admin/drivers"}
+{"timestamp":"2025-08-17T09:13:31.474Z","level":"WARN","message":"[404] Route not found: GET /api/admin/trips"}
+{"timestamp":"2025-08-17T09:13:31.478Z","level":"WARN","message":"[404] Route not found: GET /api/admin/complaints"}
+{"timestamp":"2025-08-17T09:13:31.487Z","level":"WARN","message":"[404] Route not found: GET /api/admin/drivers"}
+{"timestamp":"2025-08-17T09:13:31.490Z","level":"WARN","message":"[404] Route not found: GET /api/admin/trips"}
+{"timestamp":"2025-08-17T09:13:31.493Z","level":"WARN","message":"[404] Route not found: GET /api/admin/complaints"}
+{"timestamp":"2025-08-17T09:13:39.962Z","level":"WARN","message":"[404] Route not found: GET /api/admin/users"}
+{"timestamp":"2025-08-17T09:13:39.991Z","level":"WARN","message":"[404] Route not found: GET /api/admin/drivers"}
+{"timestamp":"2025-08-17T09:13:39.994Z","level":"WARN","message":"[404] Route not found: GET /api/admin/users"}
+{"timestamp":"2025-08-17T09:13:39.997Z","level":"WARN","message":"[404] Route not found: GET /api/admin/complaints"}
+{"timestamp":"2025-08-17T09:13:40.004Z","level":"WARN","message":"[404] Route not found: GET /api/admin/trips"}
+{"timestamp":"2025-08-17T09:13:40.012Z","level":"WARN","message":"[404] Route not found: GET /api/admin/drivers"}
+{"timestamp":"2025-08-17T09:13:40.016Z","level":"WARN","message":"[404] Route not found: GET /api/admin/complaints"}
+{"timestamp":"2025-08-17T09:13:40.019Z","level":"WARN","message":"[404] Route not found: GET /api/admin/trips"}
+{"timestamp":"2025-08-17T12:03:51.647Z","level":"INFO","message":"🚗 Car Rental API started on port 3000"}
+{"timestamp":"2025-08-17T12:03:52.456Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-17T12:08:06.196Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-17T12:08:06.935Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-17T12:12:16.007Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}
+{"timestamp":"2025-08-17T12:12:59.511Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}
+{"timestamp":"2025-08-17T12:18:18.896Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}
+{"timestamp":"2025-08-17T12:19:16.156Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-17T12:19:17.134Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-17T12:21:51.235Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}
+{"timestamp":"2025-08-17T12:28:56.548Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-17T12:28:57.681Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-17T12:29:27.584Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-17T12:29:28.664Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-17T12:32:08.641Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}
+{"timestamp":"2025-08-17T12:32:34.864Z","level":"INFO","message":"🚗 Car Rental API started on port 3000"}
+{"timestamp":"2025-08-17T12:32:35.843Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-17T12:33:01.714Z","level":"INFO","message":"🚗 Car Rental API started on port 3000"}
+{"timestamp":"2025-08-17T12:33:02.589Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-17T12:53:50.974Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-17T12:53:51.950Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-20T03:00:18.230Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-20T03:00:19.446Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-20T03:12:12.188Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-20T03:12:13.343Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-20T03:14:00.475Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}
+{"timestamp":"2025-08-20T03:15:46.837Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-20T03:15:47.656Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-20T03:22:27.845Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}
+{"timestamp":"2025-08-20T03:22:56.337Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-20T03:22:59.083Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-20T03:23:07.572Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}
+{"timestamp":"2025-08-20T03:23:40.719Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}
+{"timestamp":"2025-08-20T03:24:00.003Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-20T03:24:00.893Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-20T07:01:50.534Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-20T07:01:53.915Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-20T07:08:38.196Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-20T07:08:42.140Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-20T15:42:01.863Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-20T15:42:03.359Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-21T09:29:57.432Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-21T09:29:58.454Z","level":"INFO","message":"✅ MongoDB connected successfully"}

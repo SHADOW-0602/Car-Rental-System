@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthContext } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
+import AdminAnalytics from '../components/AdminAnalytics';
 import api from '../services/api';
 
 export default function AdminPortal() {
@@ -369,76 +370,7 @@ export default function AdminPortal() {
 
                 {/* Analytics Tab */}
                 {activeTab === 'analytics' && (
-                    <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '15px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
-                        <h2 style={{ marginBottom: '20px' }}>System Analytics & Logs</h2>
-                        
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '30px' }}>
-                            <div style={{ padding: '20px', backgroundColor: '#f0fdf4', borderRadius: '10px', textAlign: 'center' }}>
-                                <div style={{ fontSize: '32px', fontWeight: '700', color: '#16a34a' }}>
-                                    {analytics.totalUsers || 0}
-                                </div>
-                                <div style={{ color: '#16a34a' }}>Total Users</div>
-                            </div>
-                            <div style={{ padding: '20px', backgroundColor: '#fef3c7', borderRadius: '10px', textAlign: 'center' }}>
-                                <div style={{ fontSize: '32px', fontWeight: '700', color: '#d97706' }}>
-                                    {analytics.totalDrivers || 0}
-                                </div>
-                                <div style={{ color: '#d97706' }}>Active Drivers</div>
-                            </div>
-                            <div style={{ padding: '20px', backgroundColor: '#dbeafe', borderRadius: '10px', textAlign: 'center' }}>
-                                <div style={{ fontSize: '32px', fontWeight: '700', color: '#2563eb' }}>
-                                    {analytics.totalTrips || 0}
-                                </div>
-                                <div style={{ color: '#2563eb' }}>Total Trips</div>
-                            </div>
-                            <div style={{ padding: '20px', backgroundColor: '#f3e8ff', borderRadius: '10px', textAlign: 'center' }}>
-                                <div style={{ fontSize: '32px', fontWeight: '700', color: '#9333ea' }}>
-                                    ₹{analytics.totalRevenue || 0}
-                                </div>
-                                <div style={{ color: '#9333ea' }}>Total Revenue</div>
-                            </div>
-                        </div>
-
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '30px' }}>
-                            <div>
-                                <h3>Recent Activity Logs</h3>
-                                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                                    {[
-                                        { time: '10:30 AM', action: 'New user registration', user: 'john@example.com' },
-                                        { time: '10:25 AM', action: 'Trip completed', user: 'Driver #123' },
-                                        { time: '10:20 AM', action: 'Payment processed', user: 'jane@example.com' },
-                                        { time: '10:15 AM', action: 'Complaint resolved', user: 'Admin' }
-                                    ].map((log, index) => (
-                                        <div key={index} style={{
-                                            padding: '10px',
-                                            borderBottom: '1px solid #f1f5f9',
-                                            fontSize: '14px'
-                                        }}>
-                                            <span style={{ color: '#64748b' }}>{log.time}</span> - {log.action} ({log.user})
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                            
-                            <div>
-                                <h3>System Health</h3>
-                                <div style={{ display: 'grid', gap: '10px' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
-                                        <span>Server Status</span>
-                                        <span style={{ color: '#16a34a' }}>🟢 Online</span>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
-                                        <span>Database</span>
-                                        <span style={{ color: '#16a34a' }}>🟢 Connected</span>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
-                                        <span>Payment Gateway</span>
-                                        <span style={{ color: '#16a34a' }}>🟢 Active</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <AdminAnalytics />
                 )}
             </div>
         </div>

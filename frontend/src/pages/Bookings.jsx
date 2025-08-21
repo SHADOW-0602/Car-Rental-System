@@ -21,7 +21,7 @@ export default function Bookings() {
         const res = await axios.get(`${config.API_BASE_URL}/rides/mine`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        setRides(res.data);
+        setRides(res.data.rides || []);
       } catch (err) {
         console.error('Error fetching rides:', err.response?.status, err.response?.data);
         if (err.response?.status === 400) {

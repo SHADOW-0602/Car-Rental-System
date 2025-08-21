@@ -1,10 +1,10 @@
 // Configuration file for the Car Rental System frontend
 const config = {
   // API Configuration
-  API_BASE_URL: process.env.REACT_APP_API_URL || 'http://localhost:3000/api',
+  API_BASE_URL: process.env.REACT_APP_API_URL,
   
   // Socket Configuration
-  SOCKET_URL: process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000',
+  SOCKET_URL: process.env.REACT_APP_SOCKET_URL,
   
   // App Configuration
   APP_NAME: 'Car Rental System',

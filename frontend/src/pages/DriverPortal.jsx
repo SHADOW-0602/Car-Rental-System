@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { useAuthContext } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import api from '../services/api';
 import io from 'socket.io-client';
+import { fadeIn, slideUp, staggerContainer, staggerItem } from '../animations/variants';
+import { AnimatedButton, AnimatedCard, AnimatedContainer } from '../animations/AnimatedComponents';
+import { ScrollFadeIn, ScrollSlideLeft } from '../animations/ScrollAnimatedComponents';
 
 export default function DriverPortal() {
     const { user } = useAuthContext();
@@ -115,13 +119,16 @@ export default function DriverPortal() {
         <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
             <Navbar />
             
-            <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
+            <AnimatedContainer 
+                variants={fadeIn}
+                style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}
+            >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
                     <h1 style={{ fontSize: '2rem', fontWeight: '700' }}>
                         🚕 Driver Portal
                     </h1>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                        <button
+                        <AnimatedButton
                             onClick={updateAvailability}
                             style={{
                                 padding: '10px 20px',
@@ -133,8 +140,8 @@ export default function DriverPortal() {
                             }}
                         >
                             {isAvailable ? '🟢 Available' : '🔴 Offline'}
-                        </button>
-                        <button
+                        </AnimatedButton>
+                        <AnimatedButton
                             onClick={getCurrentLocation}
                             style={{
                                 padding: '10px 20px',
@@ -146,7 +153,7 @@ export default function DriverPortal() {
                             }}
                         >
                             📍 Update Location
-                        </button>
+                        </AnimatedButton>
                     </div>
                 </div>
 
@@ -158,8 +165,11 @@ export default function DriverPortal() {
                         { id: 'history', label: '📊 Ride History' },
                         { id: 'profile', label: '👤 Profile' }
                     ].map(tab => (
-                        <button
+                        <motion.button
                             key={tab.id}
+                            variants={staggerItem}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
                             onClick={() => setActiveTab(tab.id)}
                             style={{
                                 padding: '12px 20px',
@@ -172,13 +182,14 @@ export default function DriverPortal() {
                             }}
                         >
                             {tab.label}
-                        </button>
+                        </motion.button>
                     ))}
                 </div>
 
                 {/* Ride Requests Tab */}
                 {activeTab === 'requests' && (
-                    <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '15px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
+                    <ScrollFadeIn>
+                        <AnimatedCard style={{ backgroundColor: 'white', padding: '30px', borderRadius: '15px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
                         <h2 style={{ marginBottom: '20px' }}>Incoming Ride Requests</h2>
                         
                         {rideRequests.length === 0 ? (
@@ -188,12 +199,18 @@ export default function DriverPortal() {
                             </div>
                         ) : (
                             rideRequests.map(request => (
-                                <div key={request._id} style={{
-                                    padding: '20px',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: '10px',
-                                    marginBottom: '15px'
-                                }}>
+                                <motion.div 
+                                    key={request._id} 
+                                    variants={slideUp}
+                                    initial="hidden"
+                                    animate="visible"
+                                    style={{
+                                        padding: '20px',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '10px',
+                                        marginBottom: '15px'
+                                    }}
+                                >
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <div>
                                             <h3 style={{ margin: '0 0 10px 0' }}>
@@ -207,7 +224,7 @@ export default function DriverPortal() {
                                             </p>
                                         </div>
                                         <div style={{ display: 'flex', gap: '10px' }}>
-                                            <button
+                                            <AnimatedButton
                                                 onClick={() => acceptRide(request._id)}
                                                 style={{
                                                     padding: '10px 20px',
@@ -219,8 +236,8 @@ export default function DriverPortal() {
                                                 }}
                                             >
                                                 Accept
-                                            </button>
-                                            <button
+                                            </AnimatedButton>
+                                            <AnimatedButton
                                                 onClick={() => declineRide(request._id)}
                                                 style={{
                                                     padding: '10px 20px',
@@ -232,13 +249,14 @@ export default function DriverPortal() {
                                                 }}
                                             >
                                                 Decline
-                                            </button>
+                                            </AnimatedButton>
                                         </div>
                                     </div>
-                                </div>
+                                </motion.div>
                             ))
                         )}
-                    </div>
+                        </AnimatedCard>
+                    </ScrollFadeIn>
                 )}
 
                 {/* Active Rides Tab */}
@@ -411,7 +429,7 @@ export default function DriverPortal() {
                         </button>
                     </div>
                 )}
-            </div>
+            </AnimatedContainer>
         </div>
     );
 }

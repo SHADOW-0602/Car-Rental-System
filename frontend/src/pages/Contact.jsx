@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import Navbar from '../components/Navbar';
+import { useAuthContext } from '../context/AuthContext';
 import '../styles/main.css';
 
-export default function Contact({ user }) {
+export default function Contact() {
+  const { user } = useAuthContext();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
