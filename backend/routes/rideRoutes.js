@@ -37,4 +37,7 @@ router.put('/:id/status', auth, role(['driver', 'admin']), rideController.update
 router.get('/mine', auth, role(['user', 'driver']), rideController.getUserRides); // as user
 router.get('/driver', auth, role(['driver']), rideController.getDriverRides);
 
+// Get ride requests for drivers
+router.get('/requests', auth, role(['driver']), rideController.getRideRequests);
+
 module.exports = router;

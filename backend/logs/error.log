@@ -18,3 +18,7 @@
 {"timestamp":"2025-08-20T03:22:27.845Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}
 {"timestamp":"2025-08-20T03:23:07.572Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}
 {"timestamp":"2025-08-20T03:23:40.719Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}
+{"timestamp":"2025-08-22T03:06:08.843Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}
+{"timestamp":"2025-08-22T03:07:00.519Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}
+{"timestamp":"2025-08-22T03:08:33.485Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}
+{"timestamp":"2025-08-22T12:26:04.245Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}

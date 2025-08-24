@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAuthContext } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
+import VerifiedBadge from '../components/VerifiedBadge';
 import api from '../services/api';
 import io from 'socket.io-client';
 import { fadeIn, slideUp, staggerContainer, staggerItem } from '../animations/variants';
@@ -30,7 +31,7 @@ export default function DriverPortal() {
         });
 
         newSocket.on('new-ride-request', (request) => {
-            setRideRequests(prev => [...prev, request]);
+            setRideRequests(prev => Array.isArray(prev) ? [...prev, request] : [request]);
         });
 
         setSocket(newSocket);
@@ -71,18 +72,20 @@ export default function DriverPortal() {
     const loadRideRequests = async () => {
         try {
             const response = await api.get('/rides/requests');
-            setRideRequests(response.data);
+            setRideRequests(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             console.error('Error loading requests:', error);
+            setRideRequests([]);
         }
     };
 
     const loadMyRides = async () => {
         try {
             const response = await api.get('/rides/driver');
-            setMyRides(response.data);
+            setMyRides(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             console.error('Error loading rides:', error);
+            setMyRides([]);
         }
     };
 
@@ -108,7 +111,8 @@ export default function DriverPortal() {
 
     const updateAvailability = async () => {
         try {
-            await api.put('/users/availability', { available: !isAvailable });
+            const newStatus = isAvailable ? 'offline' : 'available';
+            await api.put('/users/availability', { status: newStatus });
             setIsAvailable(!isAvailable);
         } catch (error) {
             alert('Failed to update availability');
@@ -117,15 +121,16 @@ export default function DriverPortal() {
 
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
-            <Navbar />
+            <Navbar user={user} />
             
             <AnimatedContainer 
                 variants={fadeIn}
                 style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}
             >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-                    <h1 style={{ fontSize: '2rem', fontWeight: '700' }}>
+                    <h1 style={{ fontSize: '2rem', fontWeight: '700', display: 'flex', alignItems: 'center' }}>
                         🚕 Driver Portal
+                        {user?.driverInfo?.isVerified && <VerifiedBadge isVerified={true} size="medium" />}
                     </h1>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                         <AnimatedButton
@@ -162,8 +167,7 @@ export default function DriverPortal() {
                     {[
                         { id: 'requests', label: '📋 Ride Requests' },
                         { id: 'active', label: '🚗 Active Rides' },
-                        { id: 'history', label: '📊 Ride History' },
-                        { id: 'profile', label: '👤 Profile' }
+                        { id: 'history', label: '📊 Ride History' }
                     ].map(tab => (
                         <motion.button
                             key={tab.id}
@@ -362,73 +366,7 @@ export default function DriverPortal() {
                     </div>
                 )}
 
-                {/* Profile Tab */}
-                {activeTab === 'profile' && (
-                    <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '15px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
-                        <h2 style={{ marginBottom: '20px' }}>Driver Profile & Settings</h2>
-                        
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '30px' }}>
-                            <div>
-                                <h3>Personal Information</h3>
-                                <div style={{ display: 'grid', gap: '15px' }}>
-                                    <input
-                                        type="text"
-                                        placeholder="Full Name"
-                                        defaultValue={user?.name}
-                                        style={{ padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                                    />
-                                    <input
-                                        type="email"
-                                        placeholder="Email"
-                                        defaultValue={user?.email}
-                                        style={{ padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                                    />
-                                    <input
-                                        type="tel"
-                                        placeholder="Phone Number"
-                                        defaultValue={user?.phone}
-                                        style={{ padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                                    />
-                                </div>
-                            </div>
-                            
-                            <div>
-                                <h3>Vehicle Information</h3>
-                                <div style={{ display: 'grid', gap: '15px' }}>
-                                    <input
-                                        type="text"
-                                        placeholder="Vehicle Make & Model"
-                                        style={{ padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                                    />
-                                    <input
-                                        type="text"
-                                        placeholder="License Plate"
-                                        style={{ padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                                    />
-                                    <select style={{ padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-                                        <option>Vehicle Type</option>
-                                        <option>Sedan</option>
-                                        <option>SUV</option>
-                                        <option>Hatchback</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <button style={{
-                            marginTop: '30px',
-                            padding: '12px 30px',
-                            backgroundColor: '#667eea',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            fontWeight: '600'
-                        }}>
-                            Update Profile
-                        </button>
-                    </div>
-                )}
+
             </AnimatedContainer>
         </div>
     );

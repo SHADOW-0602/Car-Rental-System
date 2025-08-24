@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { useAuthContext } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import MapPicker from '../components/MapPicker';
+import AIChat from '../components/AIChat';
+
 import { haversineDistance } from '../utils/distance';
 import { fadeIn, slideUp, staggerContainer, staggerItem, scaleIn } from '../animations/variants';
 import { AnimatedButton, AnimatedCard, AnimatedContainer } from '../animations/AnimatedComponents';
@@ -61,16 +63,14 @@ export default function UserPortal({ user: propUser }) {
     const [ridePin, setRidePin] = useState(null);
     const [rideDetails, setRideDetails] = useState(null);
     const [distance, setDistance] = useState(0);
+    const [showChat, setShowChat] = useState(false);
 
     const handleBookRide = () => {
         if (!user) {
-            const email = prompt('Enter your email to continue:');
-            if (email) {
-                if (email.includes('@')) {
-                    window.location.href = '/login';
-                } else {
-                    window.location.href = '/signup';
-                }
+            if (pickupLocation && destinationLocation) {
+                window.location.href = '/signup';
+            } else {
+                window.location.href = '/signup';
             }
         } else {
             if (pickupLocation && destinationLocation) {
@@ -294,15 +294,25 @@ export default function UserPortal({ user: propUser }) {
                     </div>
                 </AnimatedContainer>
 
-                {/* Features Showcase */}
+                {/* Enhanced Features Showcase */}
                 <ScrollFadeIn style={{ maxWidth: '1200px', margin: '0 auto', padding: '80px 20px' }}>
                     <div style={{ textAlign: 'center', marginBottom: '60px' }}>
-                        <h2 style={{ fontSize: '3rem', fontWeight: '700', color: '#2d3748', marginBottom: '20px' }}>
+                        <motion.h2 
+                            initial={{ opacity: 0, y: 50 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.8 }}
+                            style={{ fontSize: '3rem', fontWeight: '700', color: '#2d3748', marginBottom: '20px' }}
+                        >
                             Why Choose RideEasy?
-                        </h2>
-                        <p style={{ fontSize: '1.2rem', color: '#64748b', maxWidth: '600px', margin: '0 auto' }}>
+                        </motion.h2>
+                        <motion.p 
+                            initial={{ opacity: 0 }}
+                            whileInView={{ opacity: 1 }}
+                            transition={{ duration: 0.8, delay: 0.2 }}
+                            style={{ fontSize: '1.2rem', color: '#64748b', maxWidth: '600px', margin: '0 auto' }}
+                        >
                             We're revolutionizing transportation with cutting-edge technology and premium service
-                        </p>
+                        </motion.p>
                     </div>
 
                     <motion.div 
@@ -314,38 +324,71 @@ export default function UserPortal({ user: propUser }) {
                     >
                         <motion.div 
                             variants={staggerItem}
-                            style={{ backgroundColor: 'white', padding: '40px', borderRadius: '25px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', textAlign: 'center', border: '1px solid #e2e8f0' }}
+                            whileHover={{ scale: 1.05, rotateY: 5 }}
+                            style={{ backgroundColor: 'white', padding: '40px', borderRadius: '25px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', textAlign: 'center', border: '1px solid #e2e8f0', cursor: 'pointer' }}
                         >
-                            <div style={{ fontSize: '80px', marginBottom: '20px', background: 'linear-gradient(135deg, #667eea, #764ba2)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>⚡</div>
+                            <motion.div 
+                                animate={{ rotate: [0, 10, -10, 0] }}
+                                transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+                                style={{ fontSize: '80px', marginBottom: '20px', background: 'linear-gradient(135deg, #667eea, #764ba2)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+                            >
+                                ⚡
+                            </motion.div>
                             <h3 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#2d3748', marginBottom: '15px' }}>Lightning Fast Booking</h3>
                             <p style={{ color: '#64748b', lineHeight: '1.6' }}>Book your ride in under 30 seconds with our streamlined booking process. Real-time driver matching and instant confirmations.</p>
                         </motion.div>
                         
                         <motion.div 
                             variants={staggerItem}
-                            style={{ backgroundColor: 'white', padding: '40px', borderRadius: '25px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', textAlign: 'center', border: '1px solid #e2e8f0' }}
+                            whileHover={{ scale: 1.05, rotateY: -5 }}
+                            style={{ backgroundColor: 'white', padding: '40px', borderRadius: '25px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', textAlign: 'center', border: '1px solid #e2e8f0', cursor: 'pointer' }}
                         >
-                            <div style={{ fontSize: '80px', marginBottom: '20px', background: 'linear-gradient(135deg, #22c55e, #16a34a)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>🛡️</div>
+                            <motion.div 
+                                animate={{ scale: [1, 1.1, 1] }}
+                                transition={{ duration: 2.5, repeat: Infinity, repeatDelay: 2 }}
+                                style={{ fontSize: '80px', marginBottom: '20px', background: 'linear-gradient(135deg, #22c55e, #16a34a)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+                            >
+                                🛡️
+                            </motion.div>
                             <h3 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#2d3748', marginBottom: '15px' }}>100% Safe & Secure</h3>
                             <p style={{ color: '#64748b', lineHeight: '1.6' }}>All drivers are thoroughly vetted and background-checked. GPS tracking, emergency support, and secure payment processing.</p>
                         </motion.div>
                         
                         <motion.div 
                             variants={staggerItem}
-                            style={{ backgroundColor: 'white', padding: '40px', borderRadius: '25px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', textAlign: 'center', border: '1px solid #e2e8f0' }}
+                            whileHover={{ scale: 1.05, rotateX: 5 }}
+                            style={{ backgroundColor: 'white', padding: '40px', borderRadius: '25px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', textAlign: 'center', border: '1px solid #e2e8f0', cursor: 'pointer' }}
                         >
-                            <div style={{ fontSize: '80px', marginBottom: '20px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>💰</div>
+                            <motion.div 
+                                animate={{ y: [0, -10, 0] }}
+                                transition={{ duration: 3, repeat: Infinity, repeatDelay: 1 }}
+                                style={{ fontSize: '80px', marginBottom: '20px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+                            >
+                                💰
+                            </motion.div>
                             <h3 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#2d3748', marginBottom: '15px' }}>Transparent Pricing</h3>
                             <p style={{ color: '#64748b', lineHeight: '1.6' }}>No hidden fees, no surge pricing surprises. Upfront pricing with multiple payment options and loyalty rewards.</p>
                         </motion.div>
                     </motion.div>
 
-                    {/* Vehicle Fleet */}
+                    {/* Vehicle Fleet with Parallax Effect */}
                     <ScrollSlideLeft style={{ textAlign: 'center', marginBottom: '60px' }}>
-                        <h2 style={{ fontSize: '2.5rem', fontWeight: '700', color: '#2d3748', marginBottom: '20px' }}>
+                        <motion.h2 
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            whileInView={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.8 }}
+                            style={{ fontSize: '2.5rem', fontWeight: '700', color: '#2d3748', marginBottom: '20px' }}
+                        >
                             🚘 Our Premium Fleet
-                        </h2>
-                        <p style={{ fontSize: '1.1rem', color: '#64748b' }}>Choose from our diverse range of vehicles for every occasion</p>
+                        </motion.h2>
+                        <motion.p 
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.8, delay: 0.2 }}
+                            style={{ fontSize: '1.1rem', color: '#64748b' }}
+                        >
+                            Choose from our diverse range of vehicles for every occasion
+                        </motion.p>
                     </ScrollSlideLeft>
 
                     <motion.div 
@@ -355,85 +398,308 @@ export default function UserPortal({ user: propUser }) {
                         viewport={{ once: true, margin: "-50px" }}
                         style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '30px', marginBottom: '80px' }}
                     >
-                        <div style={{ backgroundColor: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 15px 35px rgba(0,0,0,0.1)' }}>
-                            <div style={{ height: '200px', background: 'linear-gradient(135deg, #667eea, #764ba2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <div style={{ fontSize: '80px', color: 'white' }}>🚗</div>
-                            </div>
+                        <motion.div 
+                            variants={staggerItem}
+                            whileHover={{ y: -10, boxShadow: '0 25px 50px rgba(0,0,0,0.15)' }}
+                            style={{ backgroundColor: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 15px 35px rgba(0,0,0,0.1)', cursor: 'pointer' }}
+                        >
+                            <motion.div 
+                                whileHover={{ scale: 1.05 }}
+                                style={{ height: '200px', backgroundImage: 'url(/assets/Economy.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative', overflow: 'hidden' }}
+                            >
+                                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%)' }}></div>
+                            </motion.div>
                             <div style={{ padding: '25px' }}>
                                 <h3 style={{ fontSize: '1.3rem', fontWeight: '600', color: '#2d3748', marginBottom: '10px' }}>Economy Cars</h3>
                                 <p style={{ color: '#64748b', marginBottom: '15px' }}>Perfect for daily commutes and city travel. Fuel-efficient and budget-friendly.</p>
                                 <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#22c55e' }}>₹20 base + ₹8/km</div>
                             </div>
-                        </div>
+                        </motion.div>
 
-                        <div style={{ backgroundColor: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 15px 35px rgba(0,0,0,0.1)' }}>
-                            <div style={{ height: '200px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <div style={{ fontSize: '80px', color: 'white' }}>🚙</div>
-                            </div>
+                        <motion.div 
+                            variants={staggerItem}
+                            whileHover={{ y: -10, boxShadow: '0 25px 50px rgba(0,0,0,0.15)' }}
+                            style={{ backgroundColor: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 15px 35px rgba(0,0,0,0.1)', cursor: 'pointer' }}
+                        >
+                            <motion.div 
+                                whileHover={{ scale: 1.05 }}
+                                style={{ height: '200px', backgroundImage: 'url(/assets/SUV.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative', overflow: 'hidden' }}
+                            >
+                                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.3) 0%, rgba(22, 163, 74, 0.3) 100%)' }}></div>
+                            </motion.div>
                             <div style={{ padding: '25px' }}>
                                 <h3 style={{ fontSize: '1.3rem', fontWeight: '600', color: '#2d3748', marginBottom: '10px' }}>Premium SUVs</h3>
                                 <p style={{ color: '#64748b', marginBottom: '15px' }}>Spacious and comfortable for families and groups. Premium amenities included.</p>
                                 <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#22c55e' }}>₹20 base + ₹18/km</div>
                             </div>
-                        </div>
+                        </motion.div>
 
-                        <div style={{ backgroundColor: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 15px 35px rgba(0,0,0,0.1)' }}>
-                            <div style={{ height: '200px', background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <div style={{ fontSize: '80px', color: 'white' }}>🚘</div>
-                            </div>
+                        <motion.div 
+                            variants={staggerItem}
+                            whileHover={{ y: -10, boxShadow: '0 25px 50px rgba(0,0,0,0.15)' }}
+                            style={{ backgroundColor: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 15px 35px rgba(0,0,0,0.1)', cursor: 'pointer' }}
+                        >
+                            <motion.div 
+                                whileHover={{ scale: 1.05 }}
+                                style={{ height: '200px', backgroundImage: 'url(/assets/Luxury.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative', overflow: 'hidden' }}
+                            >
+                                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.3) 0%, rgba(217, 119, 6, 0.3) 100%)' }}></div>
+                            </motion.div>
                             <div style={{ padding: '25px' }}>
                                 <h3 style={{ fontSize: '1.3rem', fontWeight: '600', color: '#2d3748', marginBottom: '10px' }}>Luxury Vehicles</h3>
                                 <p style={{ color: '#64748b', marginBottom: '15px' }}>Executive travel with style. Premium interiors and professional chauffeurs.</p>
                                 <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#22c55e' }}>₹20 base + ₹25/km</div>
                             </div>
+                        </motion.div>
+                    </motion.div>
+
+                    {/* New Dynamic Stats Section */}
+                    <motion.div 
+                        initial={{ opacity: 0, y: 50 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.8 }}
+                        style={{
+                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                            borderRadius: '30px',
+                            padding: '60px 40px',
+                            textAlign: 'center',
+                            color: 'white',
+                            marginBottom: '80px',
+                            position: 'relative',
+                            overflow: 'hidden'
+                        }}
+                    >
+                        <motion.div 
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+                            style={{ position: 'absolute', top: '20px', right: '20px', fontSize: '60px', opacity: 0.1 }}
+                        >
+                            🌟
+                        </motion.div>
+                        <h2 style={{ fontSize: '2.5rem', fontWeight: '700', marginBottom: '50px' }}>Live Statistics</h2>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '40px' }}>
+                            <motion.div 
+                                whileHover={{ scale: 1.1 }}
+                                style={{ cursor: 'pointer' }}
+                            >
+                                <motion.div 
+                                    animate={{ scale: [1, 1.2, 1] }}
+                                    transition={{ duration: 2, repeat: Infinity, repeatDelay: 1 }}
+                                    style={{ fontSize: '3rem', fontWeight: '800', marginBottom: '10px' }}
+                                >
+                                    50K+
+                                </motion.div>
+                                <p style={{ opacity: 0.9 }}>Happy Customers</p>
+                            </motion.div>
+                            <motion.div 
+                                whileHover={{ scale: 1.1 }}
+                                style={{ cursor: 'pointer' }}
+                            >
+                                <motion.div 
+                                    animate={{ scale: [1, 1.2, 1] }}
+                                    transition={{ duration: 2, repeat: Infinity, repeatDelay: 2 }}
+                                    style={{ fontSize: '3rem', fontWeight: '800', marginBottom: '10px' }}
+                                >
+                                    1M+
+                                </motion.div>
+                                <p style={{ opacity: 0.9 }}>Rides Completed</p>
+                            </motion.div>
+                            <motion.div 
+                                whileHover={{ scale: 1.1 }}
+                                style={{ cursor: 'pointer' }}
+                            >
+                                <motion.div 
+                                    animate={{ scale: [1, 1.2, 1] }}
+                                    transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+                                    style={{ fontSize: '3rem', fontWeight: '800', marginBottom: '10px' }}
+                                >
+                                    4.9★
+                                </motion.div>
+                                <p style={{ opacity: 0.9 }}>Average Rating</p>
+                            </motion.div>
                         </div>
                     </motion.div>
 
-                    {/* Call to Action */}
+                    {/* Enhanced Call to Action */}
                     <ScrollScale style={{
                         background: 'linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%)',
                         borderRadius: '30px',
                         padding: '60px 40px',
                         textAlign: 'center',
-                        border: '2px solid #e2e8f0'
+                        border: '2px solid #e2e8f0',
+                        position: 'relative',
+                        overflow: 'hidden'
                     }}>
-                        <div style={{ fontSize: '60px', marginBottom: '20px' }}>🎆</div>
-                        <h2 style={{ fontSize: '2.5rem', fontWeight: '700', color: '#2d3748', marginBottom: '20px' }}>
+                        <motion.div 
+                            animate={{ y: [0, -20, 0], rotate: [0, 10, -10, 0] }}
+                            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                            style={{ fontSize: '60px', marginBottom: '20px' }}
+                        >
+                            🎆
+                        </motion.div>
+                        <motion.div 
+                            animate={{ x: [0, 100, 0] }}
+                            transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+                            style={{ position: 'absolute', top: '20px', left: '20px', fontSize: '30px', opacity: 0.3 }}
+                        >
+                            ✨
+                        </motion.div>
+                        <motion.div 
+                            animate={{ x: [0, -80, 0] }}
+                            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
+                            style={{ position: 'absolute', bottom: '20px', right: '20px', fontSize: '25px', opacity: 0.3 }}
+                        >
+                            🌟
+                        </motion.div>
+                        <motion.h2 
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            whileInView={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.8 }}
+                            style={{ fontSize: '2.5rem', fontWeight: '700', color: '#2d3748', marginBottom: '20px' }}
+                        >
                             Ready to Experience Premium Transportation?
-                        </h2>
-                        <p style={{ fontSize: '1.2rem', color: '#64748b', marginBottom: '40px', maxWidth: '600px', margin: '0 auto 40px' }}>
+                        </motion.h2>
+                        <motion.p 
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.8, delay: 0.2 }}
+                            style={{ fontSize: '1.2rem', color: '#64748b', marginBottom: '40px', maxWidth: '600px', margin: '0 auto 40px' }}
+                        >
                             Join thousands of satisfied customers who trust RideEasy for their daily transportation needs.
-                        </p>
-                        <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                            <a href="/signup" style={{
-                                padding: '18px 40px',
-                                backgroundColor: '#667eea',
-                                color: 'white',
-                                textDecoration: 'none',
-                                borderRadius: '50px',
-                                fontSize: '18px',
-                                fontWeight: '600',
-                                boxShadow: '0 8px 25px rgba(102, 126, 234, 0.4)',
-                                transition: 'all 0.3s ease'
-                            }}>
+                        </motion.p>
+                        <motion.div 
+                            initial={{ opacity: 0, y: 30 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.8, delay: 0.4 }}
+                            style={{ display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap' }}
+                        >
+                            <motion.a 
+                                whileHover={{ scale: 1.05, boxShadow: '0 12px 35px rgba(102, 126, 234, 0.6)' }}
+                                whileTap={{ scale: 0.95 }}
+                                href="/signup" 
+                                style={{
+                                    padding: '18px 40px',
+                                    backgroundColor: '#667eea',
+                                    color: 'white',
+                                    textDecoration: 'none',
+                                    borderRadius: '50px',
+                                    fontSize: '18px',
+                                    fontWeight: '600',
+                                    boxShadow: '0 8px 25px rgba(102, 126, 234, 0.4)',
+                                    transition: 'all 0.3s ease'
+                                }}
+                            >
                                 🚀 Sign Up Free
-                            </a>
-                            <a href="/driver/register" style={{
-                                padding: '18px 40px',
-                                backgroundColor: '#22c55e',
-                                color: 'white',
-                                textDecoration: 'none',
-                                borderRadius: '50px',
-                                fontSize: '18px',
-                                fontWeight: '600',
-                                boxShadow: '0 8px 25px rgba(34, 197, 94, 0.4)',
-                                transition: 'all 0.3s ease'
-                            }}>
+                            </motion.a>
+                            <motion.a 
+                                whileHover={{ scale: 1.05, boxShadow: '0 12px 35px rgba(34, 197, 94, 0.6)' }}
+                                whileTap={{ scale: 0.95 }}
+                                href="/driver/register" 
+                                style={{
+                                    padding: '18px 40px',
+                                    backgroundColor: '#22c55e',
+                                    color: 'white',
+                                    textDecoration: 'none',
+                                    borderRadius: '50px',
+                                    fontSize: '18px',
+                                    fontWeight: '600',
+                                    boxShadow: '0 8px 25px rgba(34, 197, 94, 0.4)',
+                                    transition: 'all 0.3s ease'
+                                }}
+                            >
                                 🚕 Become a Driver
-                            </a>
-                        </div>
+                            </motion.a>
+                        </motion.div>
                     </ScrollScale>
                 </ScrollFadeIn>
+                
+                {/* Enhanced Live Chat Support */}
+                <motion.div 
+                    initial={{ scale: 0, rotate: 180 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ duration: 0.5, delay: 1 }}
+                    style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 1000 }}
+                >
+                    {!showChat && (
+                        <motion.button
+                            whileHover={{ scale: 1.1, rotate: 10 }}
+                            whileTap={{ scale: 0.9 }}
+                            animate={{ y: [0, -5, 0] }}
+                            transition={{ y: { duration: 2, repeat: Infinity, ease: 'easeInOut' } }}
+                            onClick={() => setShowChat(true)}
+                            style={{
+                                width: '60px',
+                                height: '60px',
+                                borderRadius: '50%',
+                                backgroundColor: '#667eea',
+                                color: 'white',
+                                border: 'none',
+                                fontSize: '24px',
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)',
+                                transition: 'all 0.3s ease'
+                            }}
+                        >
+                            💬
+                        </motion.button>
+                    )}
+                    
+                    {showChat && (
+                        <div style={{ position: 'relative' }}>
+                            <button
+                                onClick={() => setShowChat(false)}
+                                style={{
+                                    position: 'absolute',
+                                    top: '-10px',
+                                    right: '-10px',
+                                    width: '30px',
+                                    height: '30px',
+                                    borderRadius: '50%',
+                                    backgroundColor: '#ef4444',
+                                    color: 'white',
+                                    border: 'none',
+                                    fontSize: '16px',
+                                    cursor: 'pointer',
+                                    zIndex: 1001
+                                }}
+                            >
+                                ×
+                            </button>
+                            <div style={{
+                                backgroundColor: 'white',
+                                borderRadius: '15px',
+                                padding: '20px',
+                                boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+                                width: '300px'
+                            }}>
+                                <h3 style={{ margin: '0 0 15px 0', color: '#2d3748' }}>Need Help?</h3>
+                                <p style={{ margin: '0 0 15px 0', color: '#64748b', fontSize: '14px' }}>
+                                    Please sign up or log in to access our AI chat support.
+                                </p>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <a href="/login" style={{
+                                        padding: '8px 16px',
+                                        backgroundColor: '#667eea',
+                                        color: 'white',
+                                        textDecoration: 'none',
+                                        borderRadius: '20px',
+                                        fontSize: '12px',
+                                        fontWeight: '600'
+                                    }}>Login</a>
+                                    <a href="/signup" style={{
+                                        padding: '8px 16px',
+                                        backgroundColor: '#22c55e',
+                                        color: 'white',
+                                        textDecoration: 'none',
+                                        borderRadius: '20px',
+                                        fontSize: '12px',
+                                        fontWeight: '600'
+                                    }}>Sign Up</a>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </motion.div>
             </div>
         );
     }
@@ -635,6 +901,92 @@ export default function UserPortal({ user: propUser }) {
                         </div>
                     )}
                 </AnimatedCard>
+                
+                {/* Live Chat Support */}
+                <motion.div style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 1000 }}>
+                    {!showChat && (
+                        <button
+                            onClick={() => setShowChat(true)}
+                            style={{
+                                width: '60px',
+                                height: '60px',
+                                borderRadius: '50%',
+                                backgroundColor: '#667eea',
+                                color: 'white',
+                                border: 'none',
+                                fontSize: '24px',
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)',
+                                transition: 'all 0.3s ease'
+                            }}
+                        >
+                            💬
+                        </button>
+                    )}
+                    
+                    {showChat && (
+                        <div style={{ position: 'relative' }}>
+                            <button
+                                onClick={() => setShowChat(false)}
+                                style={{
+                                    position: 'absolute',
+                                    top: '-10px',
+                                    right: '-10px',
+                                    width: '30px',
+                                    height: '30px',
+                                    borderRadius: '50%',
+                                    backgroundColor: '#ef4444',
+                                    color: 'white',
+                                    border: 'none',
+                                    fontSize: '16px',
+                                    cursor: 'pointer',
+                                    zIndex: 1001
+                                }}
+                            >
+                                ×
+                            </button>
+                            {user ? (
+                                <AIChat onTransferToHuman={() => {
+                                    alert('Connecting you to a human agent...');
+                                    setShowChat(false);
+                                }} />
+                            ) : (
+                                <div style={{
+                                    backgroundColor: 'white',
+                                    borderRadius: '15px',
+                                    padding: '20px',
+                                    boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+                                    width: '300px'
+                                }}>
+                                    <h3 style={{ margin: '0 0 15px 0', color: '#2d3748' }}>🤖 AI Chat Support</h3>
+                                    <p style={{ margin: '0 0 15px 0', color: '#64748b', fontSize: '14px' }}>
+                                        Please log in to access our AI chat support for car rental assistance.
+                                    </p>
+                                    <div style={{ display: 'flex', gap: '10px' }}>
+                                        <a href="/login" style={{
+                                            padding: '8px 16px',
+                                            backgroundColor: '#667eea',
+                                            color: 'white',
+                                            textDecoration: 'none',
+                                            borderRadius: '20px',
+                                            fontSize: '12px',
+                                            fontWeight: '600'
+                                        }}>Login</a>
+                                        <a href="/signup" style={{
+                                            padding: '8px 16px',
+                                            backgroundColor: '#22c55e',
+                                            color: 'white',
+                                            textDecoration: 'none',
+                                            borderRadius: '20px',
+                                            fontSize: '12px',
+                                            fontWeight: '600'
+                                        }}>Sign Up</a>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </motion.div>
             </AnimatedContainer>
         </div>
     );

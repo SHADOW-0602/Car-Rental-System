@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import CookieManager from '../utils/cookieManager';
+import VerifiedBadge from './VerifiedBadge';
 import '../styles/main.css';
 import { slideDown, staggerContainer, staggerItem } from '../animations/variants';
 import { AnimatedButton } from '../animations/AnimatedComponents';
@@ -28,33 +29,32 @@ export default function Navbar({ user }) {
 
       {/* Center Section - Role-based Navigation */}
       <div className="navbar-center">
-        {/* No navigation links for non-signed users */}
-        
         {user?.role === 'user' && (
           <>
             <Link to="/user/portal" className="navbar-link">🏠 Dashboard</Link>
-            <Link to="/vehicles" className="navbar-link">🚙 Find Rides</Link>
-            <Link to="/bookings" className="navbar-link">📋 My Rides</Link>
-            <Link to="/contact" className="navbar-link">📞 Support</Link>
+            <Link to="/about" className="navbar-link">ℹ️ About</Link>
           </>
         )}
         
         {user?.role === 'driver' && (
           <>
             <Link to="/driver/portal" className="navbar-link">🏠 Dashboard</Link>
-            <Link to="/driver/rides" className="navbar-link">🚗 My Rides</Link>
+            <Link to="/about" className="navbar-link">ℹ️ About</Link>
             <Link to="/driver/earnings" className="navbar-link">💰 Earnings</Link>
-            <Link to="/contact" className="navbar-link">📞 Support</Link>
           </>
         )}
         
         {user?.role === 'admin' && (
           <>
             <Link to="/admin/portal" className="navbar-link">🏠 Dashboard</Link>
+            <Link to="/about" className="navbar-link">ℹ️ About</Link>
             <Link to="/admin/analytics" className="navbar-link">📊 Analytics</Link>
             <Link to="/admin/users" className="navbar-link">👥 Users</Link>
-            <Link to="/admin/chat" className="navbar-link">💬 Support</Link>
           </>
+        )}
+        
+        {!user && (
+          <Link to="/about" className="navbar-link">ℹ️ About</Link>
         )}
       </div>
 
@@ -62,12 +62,15 @@ export default function Navbar({ user }) {
       <div className="navbar-auth">
         {!user ? (
           <>
+            <Link to="/contact" className="navbar-link">📞 Support</Link>
             <Link to="/login" className="auth-btn login">🔑 Login</Link>
             <Link to="/signup" className="auth-btn signup">✨ Sign Up</Link>
             <Link to="/driver/register" className="auth-btn driver-signup">🚕 Drive & Earn</Link>
           </>
         ) : (
-          <div className="user-dropdown">
+          <>
+            <Link to="/contact" className="navbar-link">📞 Support</Link>
+            <div className="user-dropdown">
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
               className="user-btn"
@@ -94,7 +97,10 @@ export default function Navbar({ user }) {
               }}>
                 {!user.profile_image && (user.name || user.email).charAt(0).toUpperCase()}
               </div>
-              <span>{user.name || user.email}</span>
+              <span style={{ display: 'flex', alignItems: 'center' }}>
+                {user.name || user.email}
+                {user.role === 'driver' && <VerifiedBadge isVerified={user.driverInfo?.isVerified} />}
+              </span>
               <span style={{ fontSize: '12px' }}>▼</span>
             </button>
             
@@ -104,8 +110,9 @@ export default function Navbar({ user }) {
                 borderBottom: '1px solid var(--border-light)',
                 backgroundColor: 'var(--bg-secondary)'
               }}>
-                <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
+                <div style={{ fontWeight: '600', color: 'var(--text-primary)', display: 'flex', alignItems: 'center' }}>
                   {user.name || 'User'}
+                  {user.role === 'driver' && <VerifiedBadge isVerified={user.driverInfo?.isVerified} />}
                 </div>
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                   {user.email}
@@ -125,13 +132,15 @@ export default function Navbar({ user }) {
                 👤 Update Profile
               </Link>
               
-              <Link 
-                to="/bookings" 
-                className="dropdown-item"
-                onClick={() => setIsDropdownOpen(false)}
-              >
-                📋 My Bookings
-              </Link>
+              {user.role !== 'driver' && (
+                <Link 
+                  to="/bookings" 
+                  className="dropdown-item"
+                  onClick={() => setIsDropdownOpen(false)}
+                >
+                  📋 My Bookings
+                </Link>
+              )}
               
               <Link 
                 to="/settings" 
@@ -160,6 +169,7 @@ export default function Navbar({ user }) {
               </AnimatedButton>
             </div>
           </div>
+          </>
         )}
       </div>
     </motion.nav>

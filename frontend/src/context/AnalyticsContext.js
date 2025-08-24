@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import axios from 'axios';
 import socket from '../services/socket';
 import config from '../config';
+import CookieManager from '../utils/cookieManager';
 
 const AnalyticsContext = createContext();
 
@@ -11,7 +12,7 @@ export function AnalyticsProvider({ children }) {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const token = localStorage.getItem('token');
+        const { token } = CookieManager.getUserSession();
         if (!token) {
           console.log('No authentication token found');
           return;

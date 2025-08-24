@@ -3,6 +3,7 @@ import { useAuthContext } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import AdminAnalytics from '../components/AdminAnalytics';
 import api from '../services/api';
+import io from 'socket.io-client';
 
 export default function AdminPortal() {
     const { user } = useAuthContext();
@@ -12,6 +13,12 @@ export default function AdminPortal() {
     const [trips, setTrips] = useState([]);
     const [complaints, setComplaints] = useState([]);
     const [analytics, setAnalytics] = useState({});
+    const [chats, setChats] = useState([]);
+    const [verificationRequests, setVerificationRequests] = useState([]);
+    const [selectedChat, setSelectedChat] = useState(null);
+    const [messages, setMessages] = useState([]);
+    const [newMessage, setNewMessage] = useState('');
+    const [socket, setSocket] = useState(null);
 
     useEffect(() => {
         loadUsers();
@@ -19,7 +26,35 @@ export default function AdminPortal() {
         loadTrips();
         loadComplaints();
         loadAnalytics();
-    }, []);
+        loadChats();
+        loadVerificationRequests();
+        
+        // Setup socket connection for real-time chat updates
+        const newSocket = io('http://localhost:5000');
+        
+        newSocket.on('connect', () => {
+            console.log('Admin connected to chat server');
+        });
+        
+        newSocket.on('chat-message', (message) => {
+            // Update messages if viewing the same chat
+            if (selectedChat && message.userId === selectedChat.userId) {
+                setMessages(prev => [...prev, message]);
+            }
+            // Refresh chat list to update last message
+            loadChats();
+        });
+        
+        newSocket.on('new-chat-notification', () => {
+            loadChats(); // Refresh chat list when new chat starts
+        });
+        
+        setSocket(newSocket);
+        
+        return () => {
+            newSocket.disconnect();
+        };
+    }, [selectedChat]);
 
     const loadUsers = async () => {
         try {
@@ -86,9 +121,73 @@ export default function AdminPortal() {
         }
     };
 
+    const loadChats = async () => {
+        try {
+            const response = await api.get('/admin/chats');
+            setChats(response.data);
+        } catch (error) {
+            console.error('Error loading chats:', error);
+        }
+    };
+    
+    const loadVerificationRequests = async () => {
+        try {
+            const response = await api.get('/admin/verification-requests');
+            setVerificationRequests(response.data);
+        } catch (error) {
+            console.error('Error loading verification requests:', error);
+        }
+    };
+    
+    const approveVerification = async (driverId) => {
+        try {
+            await api.put(`/admin/verification/${driverId}/approve`);
+            loadVerificationRequests();
+            loadDrivers();
+        } catch (error) {
+            alert('Failed to approve verification');
+        }
+    };
+    
+    const rejectVerification = async (driverId) => {
+        try {
+            await api.put(`/admin/verification/${driverId}/reject`);
+            loadVerificationRequests();
+        } catch (error) {
+            alert('Failed to reject verification');
+        }
+    };
+
+    const selectChat = async (chat) => {
+        setSelectedChat(chat);
+        try {
+            const response = await api.get(`/admin/chats/${chat.userId}/messages`);
+            setMessages(response.data);
+        } catch (error) {
+            console.error('Error loading messages:', error);
+        }
+    };
+
+    const sendMessage = async (e) => {
+        e.preventDefault();
+        if (!newMessage.trim() || !selectedChat) return;
+
+        try {
+            await api.post(`/admin/chats/${selectedChat.userId}/message`, {
+                text: newMessage,
+                sender: 'Admin Support',
+                senderType: 'admin'
+            });
+            setNewMessage('');
+            selectChat(selectedChat); // Reload messages
+        } catch (error) {
+            console.error('Error sending message:', error);
+        }
+    };
+
     return (
         <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
-            <Navbar />
+            <Navbar user={user} />
             
             <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '20px' }}>
                 <h1 style={{ fontSize: '2rem', fontWeight: '700', marginBottom: '30px' }}>
@@ -100,7 +199,9 @@ export default function AdminPortal() {
                     {[
                         { id: 'users', label: '👥 User Management' },
                         { id: 'drivers', label: '🚕 Driver Management' },
+                        { id: 'verification', label: '📋 Verification Requests' },
                         { id: 'trips', label: '🗺️ Trip Monitoring' },
+                        { id: 'chats', label: '💬 Live Chat' },
                         { id: 'complaints', label: '📞 Complaints' },
                         { id: 'analytics', label: '📊 Analytics' }
                     ].map(tab => (
@@ -185,6 +286,89 @@ export default function AdminPortal() {
                                     ))}
                                 </tbody>
                             </table>
+                        </div>
+                    </div>
+                )}
+
+                {/* Verification Requests Tab */}
+                {activeTab === 'verification' && (
+                    <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '15px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
+                        <h2 style={{ marginBottom: '20px' }}>Driver Verification Requests</h2>
+                        
+                        <div style={{ display: 'grid', gap: '15px' }}>
+                            {verificationRequests.map(request => (
+                                <div key={request._id} style={{
+                                    padding: '20px',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '10px',
+                                    backgroundColor: request.status === 'pending' ? '#fef3c7' : '#f0fdf4'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                                        <div style={{ flex: 1 }}>
+                                            <h3 style={{ margin: '0 0 10px 0' }}>{request.name}</h3>
+                                            <p style={{ margin: '0 0 10px 0', color: '#64748b' }}>
+                                                Email: {request.email} • Phone: {request.phone}
+                                            </p>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', marginBottom: '15px' }}>
+                                                {request.verificationRequest?.documents && Object.entries(request.verificationRequest.documents).map(([type, filename]) => (
+                                                    <div key={type} style={{ padding: '10px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+                                                        <strong>{type}:</strong> 
+                                                        <a href={`/uploads/verification/${filename}`} target="_blank" rel="noopener noreferrer" style={{ marginLeft: '5px', color: '#667eea' }}>
+                                                            View Document
+                                                        </a>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
+                                                Submitted: {new Date(request.verificationRequest?.submittedAt).toLocaleString()}
+                                            </p>
+                                        </div>
+                                        <div style={{ marginLeft: '20px', display: 'flex', gap: '10px' }}>
+                                            {request.verificationRequest?.status === 'pending' && (
+                                                <>
+                                                    <button
+                                                        onClick={() => approveVerification(request._id)}
+                                                        style={{
+                                                            padding: '8px 16px',
+                                                            backgroundColor: '#22c55e',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: '6px',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        Approve
+                                                    </button>
+                                                    <button
+                                                        onClick={() => rejectVerification(request._id)}
+                                                        style={{
+                                                            padding: '8px 16px',
+                                                            backgroundColor: '#ef4444',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: '6px',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        Reject
+                                                    </button>
+                                                </>
+                                            )}
+                                            <span style={{
+                                                padding: '4px 8px',
+                                                borderRadius: '12px',
+                                                fontSize: '12px',
+                                                backgroundColor: request.verificationRequest?.status === 'approved' ? '#dcfce7' : 
+                                                               request.verificationRequest?.status === 'rejected' ? '#fee2e2' : '#fef3c7',
+                                                color: request.verificationRequest?.status === 'approved' ? '#16a34a' : 
+                                                       request.verificationRequest?.status === 'rejected' ? '#dc2626' : '#d97706'
+                                            }}>
+                                                {request.verificationRequest?.status || 'pending'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 )}
@@ -304,6 +488,140 @@ export default function AdminPortal() {
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Chat Management Tab */}
+                {activeTab === 'chats' && (
+                    <div style={{ display: 'flex', height: '600px', backgroundColor: 'white', borderRadius: '15px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+                        {/* Chat List */}
+                        <div style={{ width: '300px', borderRight: '1px solid #e2e8f0' }}>
+                            <div style={{ padding: '20px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+                                <h3 style={{ margin: 0, fontSize: '16px' }}>💬 User Chats ({chats.length})</h3>
+                            </div>
+                            <div style={{ overflowY: 'auto', height: 'calc(100% - 80px)' }}>
+                                {chats.map((chat) => (
+                                    <div
+                                        key={chat.userId}
+                                        onClick={() => selectChat(chat)}
+                                        style={{
+                                            padding: '15px 20px',
+                                            borderBottom: '1px solid #f1f5f9',
+                                            cursor: 'pointer',
+                                            backgroundColor: selectedChat?.userId === chat.userId ? '#f0f9ff' : 'white'
+                                        }}
+                                    >
+                                        <div style={{ fontWeight: '600', marginBottom: '5px' }}>
+                                            {chat.userName || 'User'}
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>
+                                            {chat.userEmail}
+                                        </div>
+                                        <div style={{ fontSize: '11px', color: '#64748b' }}>
+                                            Last: {new Date(chat.lastMessageTime).toLocaleString()}
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: '#4a5568', marginTop: '5px' }}>
+                                            {chat.lastMessage?.substring(0, 30)}...
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Chat Area */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                            {selectedChat ? (
+                                <>
+                                    {/* Chat Header */}
+                                    <div style={{ padding: '20px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+                                        <h3 style={{ margin: 0, fontSize: '16px' }}>
+                                            Chat with {selectedChat.userName || 'User'}
+                                        </h3>
+                                        <p style={{ margin: '5px 0 0 0', color: '#64748b', fontSize: '14px' }}>
+                                            {selectedChat.userEmail}
+                                        </p>
+                                    </div>
+
+                                    {/* Messages */}
+                                    <div style={{ flex: 1, padding: '20px', overflowY: 'auto', backgroundColor: '#f8fafc' }}>
+                                        {messages.map((msg, index) => (
+                                            <div key={index} style={{
+                                                marginBottom: '15px',
+                                                display: 'flex',
+                                                justifyContent: msg.senderType === 'admin' ? 'flex-end' : 'flex-start'
+                                            }}>
+                                                <div style={{
+                                                    maxWidth: '70%',
+                                                    padding: '10px 15px',
+                                                    borderRadius: '15px',
+                                                    backgroundColor: msg.senderType === 'admin' ? '#667eea' : 'white',
+                                                    color: msg.senderType === 'admin' ? 'white' : '#2d3748',
+                                                    boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
+                                                }}>
+                                                    <p style={{ margin: 0, fontSize: '14px' }}>{msg.text}</p>
+                                                    <small style={{
+                                                        opacity: 0.7,
+                                                        fontSize: '11px',
+                                                        display: 'block',
+                                                        marginTop: '5px'
+                                                    }}>
+                                                        {msg.sender} - {new Date(msg.timestamp).toLocaleTimeString()}
+                                                    </small>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Message Input */}
+                                    <form onSubmit={sendMessage} style={{
+                                        padding: '20px',
+                                        borderTop: '1px solid #e2e8f0',
+                                        backgroundColor: 'white',
+                                        display: 'flex',
+                                        gap: '10px'
+                                    }}>
+                                        <input
+                                            type="text"
+                                            value={newMessage}
+                                            onChange={(e) => setNewMessage(e.target.value)}
+                                            placeholder="Type your response..."
+                                            style={{
+                                                flex: 1,
+                                                padding: '10px',
+                                                border: '1px solid #e2e8f0',
+                                                borderRadius: '20px',
+                                                outline: 'none'
+                                            }}
+                                        />
+                                        <button
+                                            type="submit"
+                                            disabled={!newMessage.trim()}
+                                            style={{
+                                                padding: '10px 20px',
+                                                backgroundColor: '#667eea',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '20px',
+                                                cursor: 'pointer',
+                                                opacity: !newMessage.trim() ? 0.5 : 1
+                                            }}
+                                        >
+                                            Send
+                                        </button>
+                                    </form>
+                                </>
+                            ) : (
+                                <div style={{
+                                    flex: 1,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#64748b'
+                                }}>
+                                    Select a chat to view messages
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

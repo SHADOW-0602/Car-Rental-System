@@ -309,3 +309,19 @@ exports.getTripStatus = async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 };
+
+exports.getRideRequests = async (req, res) => {
+    try {
+        const requests = await Ride.find({ 
+            status: 'requested',
+            driver_id: { $exists: false }
+        })
+        .populate('user_id', 'name phone rating')
+        .sort({ createdAt: -1 })
+        .limit(20);
+        
+        res.json({ success: true, requests });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};

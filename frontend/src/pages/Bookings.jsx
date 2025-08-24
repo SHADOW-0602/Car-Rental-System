@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import Navbar from '../components/Navbar';
+import VerifiedBadge from '../components/VerifiedBadge';
 import { useAuthContext } from '../context/AuthContext';
 import config from '../config';
 import '../styles/main.css';
@@ -50,7 +51,7 @@ export default function Bookings() {
           marginBottom: '15px',
           textShadow: '0 2px 4px rgba(0,0,0,0.3)'
         }}>
-          Your Ride History
+          My Rides
         </h1>
         <p style={{
           fontSize: '1.1rem',
@@ -58,7 +59,7 @@ export default function Bookings() {
           maxWidth: '600px',
           margin: '0 auto'
         }}>
-          Track all your past and current rides in one place
+          View all your rides - recent, ongoing, and completed
         </p>
       </div>
 
@@ -224,6 +225,43 @@ export default function Bookings() {
                     </p>
                   </div>
                 </div>
+
+                {/* Driver Information */}
+                {ride.driver_id && (
+                  <div style={{
+                    padding: '15px',
+                    backgroundColor: '#f0f9ff',
+                    borderRadius: '12px',
+                    border: '1px solid #bae6fd',
+                    marginBottom: '15px'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      marginBottom: '8px'
+                    }}>
+                      <span style={{ marginRight: '8px', fontSize: '16px' }}>🚕</span>
+                      <span style={{ color: '#0c4a6e', fontWeight: '600', fontSize: '14px' }}>
+                        Driver
+                      </span>
+                    </div>
+                    <p style={{
+                      color: '#2d3748',
+                      margin: 0,
+                      fontSize: '14px',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}>
+                      {ride.driver_id.name}
+                      <VerifiedBadge isVerified={ride.driver_id.driverInfo?.isVerified} />
+                      {ride.driver_id.phone && (
+                        <span style={{ marginLeft: '10px', color: '#64748b' }}>
+                          • {ride.driver_id.phone}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
 
                 {/* Additional Details */}
                 {ride.fare && (

@@ -20,6 +20,7 @@ import Contact from './pages/Contact';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import Help from './pages/Help';
+import About from './pages/About';
 import AdminChat from './pages/AdminChat';
 import UserPortal from './pages/UserPortal';
 import DriverPortal from './pages/DriverPortal';
@@ -89,6 +90,7 @@ function AppRoutes() {
               <Bookings />
             </ProtectedRoute>
           } />
+          <Route path="/about" element={<About />} />
           <Route path="/contact" element={
             <ProtectedRoute allowedRoles={['user', 'driver', 'admin']}>
               <Contact />

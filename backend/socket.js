@@ -28,6 +28,8 @@ function initSocket(server) {
             io.emit('notification', data);
         });
 
+
+
         // Disconnect
         socket.on('disconnect', () => {
             console.log(`❌ User disconnected: ${socket.id}`);

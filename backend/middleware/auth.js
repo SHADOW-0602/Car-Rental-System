@@ -1,18 +1,8 @@
-const { validateSession } = require('./sessionManager');
+const { cookieAuth } = require('./cookieAuth');
 const { sanitizeOutput } = require('./dataEncryption');
 
-// Enhanced authentication with session management
-module.exports = async (req, res, next) => {
-    try {
-        await validateSession(req, res, next);
-    } catch (error) {
-        res.status(401).json({ 
-            success: false, 
-            error: 'Authentication failed',
-            code: 'AUTH_FAILED'
-        });
-    }
-};
+// Enhanced authentication with cookie and session management
+module.exports = cookieAuth;
 
 // Middleware to sanitize response data based on user role
 module.exports.sanitizeResponse = (req, res, next) => {

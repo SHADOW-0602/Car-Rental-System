@@ -12,7 +12,9 @@ export default function SimpleLogin({ onLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [secretKey, setSecretKey] = useState('');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
   const [showSecretKey, setShowSecretKey] = useState(false);
+  const [show2FA, setShow2FA] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -26,12 +28,22 @@ export default function SimpleLogin({ onLogin }) {
       if (showSecretKey) {
         payload.secretKey = secretKey;
       }
+      if (show2FA) {
+        payload.twoFactorCode = twoFactorCode;
+      }
       
       const res = await axios.post(`${config.API_BASE_URL}/users/login`, payload);
       
       // Handle admin secret key requirement
       if (res.data.requiresSecretKey) {
         setShowSecretKey(true);
+        setError('');
+        return;
+      }
+      
+      // Handle 2FA requirement
+      if (res.data.requires2FA) {
+        setShow2FA(true);
         setError('');
         return;
       }
@@ -132,6 +144,27 @@ export default function SimpleLogin({ onLogin }) {
             </div>
           )}
           
+          {show2FA && (
+            <div className="form-group">
+              <label className="form-label" style={{ color: '#667eea' }}>
+                🔐 Two-Factor Authentication Code
+              </label>
+              <input
+                type="text"
+                value={twoFactorCode}
+                onChange={(e) => setTwoFactorCode(e.target.value)}
+                placeholder="Enter 6-digit code"
+                required
+                className="form-input"
+                style={{ borderColor: '#667eea' }}
+                maxLength="6"
+              />
+              <p style={{ fontSize: '12px', color: '#667eea', margin: '5px 0 0 0' }}>
+                Enter the code from your authenticator app.
+              </p>
+            </div>
+          )}
+          
           {error && (
             <div className="form-error">
               ❌ {error}
@@ -143,7 +176,7 @@ export default function SimpleLogin({ onLogin }) {
             disabled={loading}
             className="form-btn"
           >
-            {loading ? '🔄 Signing In...' : showSecretKey ? '🔑 Admin Login' : '🚀 Sign In'}
+            {loading ? '🔄 Signing In...' : showSecretKey ? '🔑 Admin Login' : show2FA ? '🔐 Verify 2FA' : '🚀 Sign In'}
           </button>
         </form>
         

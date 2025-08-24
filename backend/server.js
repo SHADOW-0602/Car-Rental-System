@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const http = require('http');
+const cookieParser = require('cookie-parser');
 const { initSocket } = require('./socket');
 const errorHandler = require('./middleware/errorHandler');
 const logger = require('./utils/logger');
@@ -32,6 +33,7 @@ app.use(cors({
 // Body parsing with size limits
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ limit: '1mb', extended: true }));
+app.use(cookieParser());
 
 // Trust proxy for accurate IP addresses
 app.set('trust proxy', 1);
@@ -48,6 +50,7 @@ app.use('/api/invoices', require('./routes/invoiceRoutes'));
 app.use('/api/ratings', require('./routes/ratingRoutes'));
 app.use('/api/setup', require('./routes/setupRoutes'));
 app.use('/api/security', require('./routes/securityRoutes'));
+app.use('/api/support', require('./routes/supportRoutes'));
 
 // Global error handlers
 process.on('uncaughtException', (err) => {
@@ -62,16 +65,30 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Initialize collections if they don't exist
 const initializeCollections = async () => {
-    const collections = await mongoose.connection.db.listCollections().toArray();
-    const existingCollections = collections.map(col => col.name);
-    
-    const requiredCollections = ['users', 'drivers', 'admins', 'vehicles', 'rides', 'analytics', 'chats', 'invoices', 'ratings', 'payments'];
-    
-    for (const collectionName of requiredCollections) {
-        if (!existingCollections.includes(collectionName)) {
-            await mongoose.connection.db.createCollection(collectionName);
-            console.log(`✅ Created collection: ${collectionName}`);
+    try {
+        const collections = await mongoose.connection.db.listCollections().toArray();
+        const existingCollections = collections.map(col => col.name);
+        
+        const requiredCollections = [
+            'users', 'drivers', 'admins', 'vehicles', 'rides', 
+            'analytics', 'chats', 'invoices', 'ratings', 'payments', 
+            'supporttickets', 'supportfeedbacks', 'chatsessions'
+        ];
+        
+        console.log('📋 Checking database collections...');
+        
+        for (const collectionName of requiredCollections) {
+            if (!existingCollections.includes(collectionName)) {
+                await mongoose.connection.db.createCollection(collectionName);
+                console.log(`✅ Created collection: ${collectionName}`);
+            } else {
+                console.log(`✓ Collection exists: ${collectionName}`);
+            }
         }
+        
+        console.log('📋 Collection initialization completed');
+    } catch (error) {
+        console.error('❌ Error initializing collections:', error);
     }
 };
 
@@ -85,6 +102,16 @@ mongoose.connect(process.env.MONGODB_URI)
     .then(async () => {
         logger.info('✅ MongoDB connected successfully');
         console.log('✅ MongoDB connected');
+        
+        // Wait for connection to be ready
+        await new Promise(resolve => {
+            if (mongoose.connection.readyState === 1) {
+                resolve();
+            } else {
+                mongoose.connection.once('open', resolve);
+            }
+        });
+        
         await initializeCollections();
         await SetupService.initializeSystem();
     })
