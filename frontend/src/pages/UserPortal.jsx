@@ -143,7 +143,7 @@ export default function UserPortal({ user: propUser }) {
                         variants={slideUp}
                         style={{ fontSize: '4rem', fontWeight: '800', marginBottom: '30px', textShadow: '0 4px 8px rgba(0,0,0,0.3)' }}
                     >
-                        🚗 RideEasy - Premium Car Rental
+                        🚗 UrbanFleet - Premium Car Rental
                     </motion.h1>
                     <p style={{ fontSize: '1.4rem', opacity: '0.9', marginBottom: '50px', maxWidth: '600px', margin: '0 auto 50px' }}>
                         Experience luxury transportation with our premium fleet of vehicles. Safe, reliable, and affordable rides at your fingertips.
@@ -213,7 +213,7 @@ export default function UserPortal({ user: propUser }) {
                                 🚀 Try Our Booking Experience
                             </h2>
                             <p style={{ color: '#64748b', fontSize: '1.1rem' }}>
-                                See how easy it is to book a ride with RideEasy
+                                See how easy it is to book a ride with UrbanFleet
                             </p>
                         </div>
                         
@@ -303,7 +303,7 @@ export default function UserPortal({ user: propUser }) {
                             transition={{ duration: 0.8 }}
                             style={{ fontSize: '3rem', fontWeight: '700', color: '#2d3748', marginBottom: '20px' }}
                         >
-                            Why Choose RideEasy?
+                            Why Choose UrbanFleet?
                         </motion.h2>
                         <motion.p 
                             initial={{ opacity: 0 }}
@@ -565,7 +565,7 @@ export default function UserPortal({ user: propUser }) {
                             transition={{ duration: 0.8, delay: 0.2 }}
                             style={{ fontSize: '1.2rem', color: '#64748b', marginBottom: '40px', maxWidth: '600px', margin: '0 auto 40px' }}
                         >
-                            Join thousands of satisfied customers who trust RideEasy for their daily transportation needs.
+                            Join thousands of satisfied customers who trust UrbanFleet for their daily transportation needs.
                         </motion.p>
                         <motion.div 
                             initial={{ opacity: 0, y: 30 }}

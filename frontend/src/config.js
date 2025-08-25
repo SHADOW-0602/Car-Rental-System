@@ -7,7 +7,7 @@ const config = {
   SOCKET_URL: process.env.REACT_APP_SOCKET_URL,
   
   // App Configuration
-  APP_NAME: 'Car Rental System',
+  APP_NAME: 'UrbanFleet',
   APP_VERSION: '1.0.0',
   
   // Feature Flags

@@ -147,3 +147,5 @@
 {"timestamp":"2025-08-23T12:39:45.309Z","level":"WARN","message":"[404] Route not found: POST /api/users/submit-verification"}
 {"timestamp":"2025-08-23T12:43:55.082Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
 {"timestamp":"2025-08-23T12:43:56.295Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-24T12:18:02.168Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-24T12:18:03.460Z","level":"INFO","message":"✅ MongoDB connected successfully"}

@@ -11,6 +11,7 @@ const { updateDriverLocation, updateDriverLocationInFile } = require('../service
 const { sanitizeOutput, maskSensitiveData } = require('../middleware/dataEncryption');
 const aiChatService = require('../services/aiChatService');
 const ChatSession = require('../models/ChatSession');
+const emailService = require('../services/emailService');
 require('../services/marketingService'); // Initialize marketing scheduler
 
 exports.register = async (req, res) => {
@@ -39,6 +40,14 @@ exports.register = async (req, res) => {
                 driverInfo
             };
             const driver = await Driver.create(driverData);
+            
+            // Send welcome email to new driver
+            try {
+                await emailService.sendWelcomeEmail(driver, 'driver');
+            } catch (emailError) {
+                console.error('Failed to send driver welcome email:', emailError);
+            }
+            
             return res.json({ success: true, user: sanitizeOutput(driver, 'driver') });
         } else {
             const userData = {
@@ -49,9 +58,12 @@ exports.register = async (req, res) => {
             };
             const user = await User.create(userData);
             
-            // Send welcome marketing email
-            const marketingService = require('../services/marketingService');
-            await marketingService.sendWelcomeEmail(user);
+            // Send welcome email to new user
+            try {
+                await emailService.sendWelcomeEmail(user, 'user');
+            } catch (emailError) {
+                console.error('Failed to send user welcome email:', emailError);
+            }
             
             return res.json({ success: true, user: sanitizeOutput(user, 'user') });
         }

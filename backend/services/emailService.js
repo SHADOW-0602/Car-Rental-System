@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const logger = require('../utils/logger');
 
 class EmailService {
     constructor() {
@@ -26,10 +27,49 @@ class EmailService {
         }
     }
 
+    async sendWelcomeEmail(user, role = 'user') {
+        const template = this.getWelcomeTemplate(user.name, role);
+        const subject = role === 'driver' ? 'Welcome to UrbanFleet - Driver Portal!' : 'Welcome to UrbanFleet!';
+        return await this.sendMarketingEmail(user.email, subject, template);
+    }
+
+    getWelcomeTemplate(userName, role) {
+        if (role === 'driver') {
+            return `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #48bb78;">🚕 Welcome to UrbanFleet, ${userName}!</h2>
+                    <p>Congratulations on joining our driver community!</p>
+                    <p>You can now:</p>
+                    <ul>
+                        <li>Accept ride requests</li>
+                        <li>Track your earnings</li>
+                        <li>Manage your availability</li>
+                    </ul>
+                    <p>Start earning today with your first ride bonus: <strong>DRIVER50</strong></p>
+                    <p>Happy driving!</p>
+                </div>
+            `;
+        }
+        return `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #667eea;">🚗 Welcome to UrbanFleet, ${userName}!</h2>
+                <p>Thank you for joining our premium car rental service!</p>
+                <p>Get started with:</p>
+                <ul>
+                    <li>Book rides instantly</li>
+                    <li>Choose from luxury vehicles</li>
+                    <li>Track your rides in real-time</li>
+                </ul>
+                <p>Special welcome offer: <strong>20% off</strong> your first ride with code: <strong>WELCOME20</strong></p>
+                <p>Happy riding!</p>
+            </div>
+        `;
+    }
+
     getMarketingTemplate(userName, offerType) {
         const templates = {
             welcome: `
-                <h2>Welcome to Car Rental System, ${userName}!</h2>
+                <h2>Welcome to UrbanFleet, ${userName}!</h2>
                 <p>Get 20% off your first ride with code: WELCOME20</p>
             `,
             weekend: `

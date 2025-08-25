@@ -23,7 +23,7 @@ export default function Navbar({ user }) {
           <div className="navbar-logo-icon">
             🚗
           </div>
-          CarRental
+          UrbanFleet
         </Link>
       </div>
 
@@ -62,7 +62,6 @@ export default function Navbar({ user }) {
       <div className="navbar-auth">
         {!user ? (
           <>
-            <Link to="/contact" className="navbar-link">📞 Support</Link>
             <Link to="/login" className="auth-btn login">🔑 Login</Link>
             <Link to="/signup" className="auth-btn signup">✨ Sign Up</Link>
             <Link to="/driver/register" className="auth-btn driver-signup">🚕 Drive & Earn</Link>

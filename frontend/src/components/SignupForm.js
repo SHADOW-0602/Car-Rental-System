@@ -94,7 +94,7 @@ export default function SignupForm({ onSignup }) {
             ✨
           </div>
           <h2 className="form-title">
-            Join CarRental
+            Join UrbanFleet
           </h2>
           <p className="form-subtitle">
             Create your account and start your journey

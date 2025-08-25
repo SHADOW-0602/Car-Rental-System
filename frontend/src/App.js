@@ -22,6 +22,7 @@ import Settings from './pages/Settings';
 import Help from './pages/Help';
 import About from './pages/About';
 import AdminChat from './pages/AdminChat';
+
 import UserPortal from './pages/UserPortal';
 import DriverPortal from './pages/DriverPortal';
 import AdminPortal from './pages/AdminPortal';
@@ -55,12 +56,12 @@ function AppRoutes() {
   }
   
   const getDashboardRoute = () => {
-    if (!user) return '/dashboard';
+    if (!user) return '/';
     switch (user.role) {
       case 'admin': return '/admin/portal';
       case 'driver': return '/driver/portal';
       case 'user': return '/user/portal';
-      default: return '/dashboard';
+      default: return '/';
     }
   };
   
@@ -70,7 +71,7 @@ function AppRoutes() {
       <CookieConsent />
       <ErrorBoundary>
         <Routes>
-          <Route path="/" element={<Navigate to={getDashboardRoute()} replace />} />
+          <Route path="/" element={user ? <Navigate to={getDashboardRoute()} replace /> : <UserPortal user={user} />} />
           <Route path="/dashboard" element={<UserPortal user={user} />} />
           <Route path="/login" element={<SimpleLogin />} />
           <Route path="/signup" element={<SignupForm />} />
