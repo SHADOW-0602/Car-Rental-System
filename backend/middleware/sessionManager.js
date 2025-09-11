@@ -39,19 +39,10 @@ class SessionManager {
     static async validateSession(token, req) {
         try {
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            const session = this.activeSessions.get(decoded.sessionId);
-            
-            if (!session || !session.isActive) {
-                throw new Error('Session expired or invalid');
-            }
-            
-            // Update last activity
-            session.lastActivity = new Date();
             
             // Verify user still exists and is active
             const userExists = await this.verifyUserExists(decoded.id, decoded.role);
             if (!userExists) {
-                this.invalidateSession(decoded.sessionId);
                 throw new Error('User account no longer exists');
             }
             

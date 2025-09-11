@@ -137,3 +137,17 @@ exports.getUserRatingSummary = async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 };
+
+// Get driver dashboard statistics
+exports.getDriverStats = async (req, res) => {
+    try {
+        const stats = await ratingService.getDriverDashboardStats(req.user.id);
+        
+        res.json({
+            success: true,
+            stats
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};

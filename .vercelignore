@@ -1,0 +1,15 @@
+# Vercel ignore file
+node_modules
+.env
+.env.local
+.env.development
+*.log
+.DS_Store
+backend/logs/
+backend/uploads/
+frontend/build/
+.git/
+README-DEPLOYMENT.md
+README.md
+*.md
+.gitignore

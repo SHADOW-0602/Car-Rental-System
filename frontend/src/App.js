@@ -18,10 +18,11 @@ import DriverEarnings from './pages/DriverEarnings';
 import DriverRides from './pages/DriverRides';
 import Contact from './pages/Contact';
 import Profile from './pages/Profile';
-import Settings from './pages/Settings';
+import UserSettings from './pages/UserSettings';
+import DriverSettings from './pages/DriverSettings';
 import Help from './pages/Help';
 import About from './pages/About';
-import AdminChat from './pages/AdminChat';
+
 
 import UserPortal from './pages/UserPortal';
 import DriverPortal from './pages/DriverPortal';
@@ -32,6 +33,9 @@ import ProtectedRoute from './components/ProtectedRoute';
 import NotificationBanner from './components/NotificationBanner';
 import ErrorBoundary from './components/ErrorBoundary';
 import CookieConsent from './components/CookieConsent';
+import RideNotifications from './components/RideNotifications';
+import TrackRide from './pages/TrackRide';
+
 import './utils/errorHandler'; // Initialize global error handlers
 
 function AppRoutes() {
@@ -69,6 +73,8 @@ function AppRoutes() {
     <Router>
       <NotificationBanner />
       <CookieConsent />
+      <RideNotifications />
+
       <ErrorBoundary>
         <Routes>
           <Route path="/" element={user ? <Navigate to={getDashboardRoute()} replace /> : <UserPortal user={user} />} />
@@ -102,9 +108,14 @@ function AppRoutes() {
               <Profile />
             </ProtectedRoute>
           } />
-          <Route path="/settings" element={
-            <ProtectedRoute allowedRoles={['user', 'driver', 'admin']}>
-              <Settings />
+          <Route path="/user/settings" element={
+            <ProtectedRoute allowedRoles={['user']}>
+              <UserSettings />
+            </ProtectedRoute>
+          } />
+          <Route path="/driver/settings" element={
+            <ProtectedRoute allowedRoles={['driver']}>
+              <DriverSettings />
             </ProtectedRoute>
           } />
           <Route path="/help" element={
@@ -122,11 +133,7 @@ function AppRoutes() {
               <AnalyticsDashboard />
             </ProtectedRoute>
           } />
-          <Route path="/admin/chat" element={
-            <ProtectedRoute allowedRoles={['admin']}>
-              <AdminChat />
-            </ProtectedRoute>
-          } />
+
           <Route path="/user/portal" element={
             <ProtectedRoute allowedRoles={['user']}>
               <UserPortal />
@@ -155,6 +162,11 @@ function AppRoutes() {
           <Route path="/admin/users" element={
             <ProtectedRoute allowedRoles={['admin']}>
               <AdminUsers />
+            </ProtectedRoute>
+          } />
+          <Route path="/track-ride/:rideId" element={
+            <ProtectedRoute allowedRoles={['user', 'driver']}>
+              <TrackRide />
             </ProtectedRoute>
           } />
         </Routes>

@@ -17,7 +17,7 @@ const supportTicketSchema = new mongoose.Schema({
     category: {
         type: String,
         required: true,
-        enum: ['booking', 'ride', 'account', 'payment']
+        enum: ['ride', 'account', 'payment']
     },
     issue: {
         type: String,

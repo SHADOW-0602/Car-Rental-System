@@ -10,20 +10,31 @@ const paymentGateway = new PaymentGateway();
 exports.initiatePayment = async (req, res) => {
     try {
         const { rideId, paymentMethod, amount } = req.body;
+        console.log('Payment initiation request:', { rideId, paymentMethod, amount, userId: req.user.id });
 
         // Verify ride exists and belongs to user
-        const ride = await Ride.findById(rideId);
-        if (!ride || ride.user_id.toString() !== req.user.id) {
+        const ride = await Ride.findById(rideId).populate('user_id', 'name email phone');
+        console.log('Found ride:', ride ? { id: ride._id, status: ride.status, userId: ride.user_id?._id } : 'null');
+        
+        if (!ride) {
             return res.status(404).json({
                 success: false,
-                error: 'Ride not found or unauthorized'
+                error: 'Ride not found'
+            });
+        }
+        
+        if (ride.user_id._id.toString() !== req.user.id) {
+            return res.status(403).json({
+                success: false,
+                error: 'Unauthorized access to this ride'
             });
         }
 
         if (ride.status !== 'completed') {
             return res.status(400).json({
                 success: false,
-                error: 'Payment can only be made for completed rides'
+                error: 'Payment can only be made for completed rides',
+                rideStatus: ride.status
             });
         }
 

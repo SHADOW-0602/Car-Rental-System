@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import { useAuthContext } from '../context/AuthContext';
+import api from '../services/api';
 import '../styles/main.css';
 
 export default function Contact() {
@@ -13,6 +14,8 @@ export default function Contact() {
   });
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
@@ -21,16 +24,45 @@ export default function Contact() {
     });
   };
 
+  const loadMessages = async () => {
+    if (!user) return;
+    
+    setLoadingMessages(true);
+    try {
+      console.log('Loading messages for user:', user._id);
+      const response = await api.get('/admin/contact/my-messages');
+      console.log('Messages response:', response.data);
+      setMessages(response.data || []);
+    } catch (error) {
+      console.error('Failed to load messages:', error);
+      console.error('Error details:', error.response?.data);
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMessages();
+  }, [user]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     
-    // Simulate form submission
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const messageData = {
+        ...formData,
+        userId: user?._id
+      };
+      await api.post('/admin/contact', messageData);
       setSubmitted(true);
       setFormData({ name: '', email: '', subject: '', message: '' });
-    }, 1500);
+      loadMessages(); // Refresh messages
+    } catch (error) {
+      alert('Failed to send message. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -49,6 +81,81 @@ export default function Contact() {
 
       {/* Main Content */}
       <div className="grid-container">
+        {/* Message History for logged in users */}
+        {user && messages.length > 0 && (
+          <div className="card" style={{ marginBottom: '30px' }}>
+            <div className="card-header">
+              <div className="card-icon" style={{ backgroundColor: '#3b82f6' }}>
+                💬
+              </div>
+              <h2 className="card-title">
+                Your Messages & Replies
+              </h2>
+            </div>
+            
+            {loadingMessages ? (
+              <div style={{ textAlign: 'center', padding: '20px' }}>
+                Loading messages...
+              </div>
+            ) : (
+              <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                {messages.map((msg) => (
+                  <div key={msg._id} style={{
+                    padding: '20px',
+                    borderBottom: '1px solid #e2e8f0',
+                    marginBottom: '15px'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: '10px'
+                    }}>
+                      <h4 style={{ margin: 0, color: '#2d3748' }}>{msg.subject}</h4>
+                      <span style={{
+                        padding: '4px 8px',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        backgroundColor: msg.status === 'replied' ? '#dcfce7' : '#fef3c7',
+                        color: msg.status === 'replied' ? '#166534' : '#92400e'
+                      }}>
+                        {msg.status === 'replied' ? '✅ Replied' : '⏳ Pending'}
+                      </span>
+                    </div>
+                    
+                    <div style={{
+                      backgroundColor: '#f8fafc',
+                      padding: '15px',
+                      borderRadius: '8px',
+                      marginBottom: '10px'
+                    }}>
+                      <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '5px' }}>
+                        Your message ({new Date(msg.createdAt).toLocaleDateString()}):
+                      </div>
+                      <p style={{ margin: 0, color: '#374151' }}>{msg.message}</p>
+                    </div>
+                    
+                    {msg.reply && (
+                      <div style={{
+                        backgroundColor: '#e0f2fe',
+                        padding: '15px',
+                        borderRadius: '8px',
+                        borderLeft: '4px solid #0ea5e9'
+                      }}>
+                        <div style={{ fontSize: '12px', color: '#0369a1', marginBottom: '5px' }}>
+                          Admin reply ({new Date(msg.reply.repliedAt).toLocaleDateString()}):
+                        </div>
+                        <p style={{ margin: 0, color: '#0c4a6e', fontWeight: '500' }}>{msg.reply.text}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        
         <div className="grid-2">
           {/* Contact Form */}
           <div className="card">

@@ -1,82 +1,83 @@
 const express = require('express');
-const auth = require('../middleware/auth');
-const roleAuth = require('../middleware/roleAuth');
-const Chat = require('../models/Chat');
-
 const router = express.Router();
+const Chat = require('../models/Chat');
+const auth = require('../middleware/auth');
+const role = require('../middleware/role');
 
-// Get chat history for user
+// Send a chat message
+router.post('/send', auth, async (req, res) => {
+  try {
+    const { text } = req.body;
+    
+    if (!text || text.trim() === '') {
+      return res.status(400).json({ success: false, error: 'Message text is required' });
+    }
+    
+    const chat = new Chat({
+      userId: req.user.id,
+      text: text.trim(),
+      isFromUser: true
+    });
+    
+    await chat.save();
+    
+    res.json({ success: true, message: 'Message sent successfully', chat });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get chat history for a user
 router.get('/history', auth, async (req, res) => {
-    try {
-        const messages = await Chat.find({ userId: req.user.id })
-            .sort({ timestamp: 1 })
-            .limit(50);
-        res.json(messages);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+  try {
+    const chats = await Chat.find({ userId: req.user.id })
+      .sort({ timestamp: 1 })
+      .limit(100);
+    
+    res.json({ success: true, chats });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
-// Send message
-router.post('/message', auth, async (req, res) => {
-    try {
-        const { text, senderType = 'user' } = req.body;
-        
-        const message = new Chat({
-            userId: req.user.id,
-            text,
-            sender: req.user.name || req.user.email,
-            senderType,
-            timestamp: new Date()
-        });
-
-        await message.save();
-        res.json(message);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+// Admin: Reply to a chat
+router.post('/reply/:userId', auth, role(['admin']), async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { text } = req.body;
+    
+    if (!text || text.trim() === '') {
+      return res.status(400).json({ success: false, error: 'Reply text is required' });
     }
+    
+    const chat = new Chat({
+      userId,
+      text: text.trim(),
+      isFromUser: false,
+      adminId: req.user.id
+    });
+    
+    await chat.save();
+    
+    res.json({ success: true, message: 'Reply sent successfully', chat });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
-// Get active chats (admin only)
-router.get('/active-chats', auth, roleAuth(['admin']), async (req, res) => {
-    try {
-        const activeChats = await Chat.aggregate([
-            {
-                $group: {
-                    _id: '$userId',
-                    lastMessage: { $last: '$text' },
-                    lastTimestamp: { $last: '$timestamp' },
-                    userName: { $last: '$sender' },
-                    messageCount: { $sum: 1 }
-                }
-            },
-            { $sort: { lastTimestamp: -1 } }
-        ]);
-        
-        const formattedChats = activeChats.map(chat => ({
-            userId: chat._id,
-            userName: chat.userName,
-            lastMessage: chat.lastMessage,
-            unreadCount: 0, // Can be enhanced with read status
-            timestamp: chat.lastTimestamp
-        }));
-        
-        res.json(formattedChats);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Get chat history for specific user (admin)
-router.get('/history/:userId', auth, roleAuth(['admin']), async (req, res) => {
-    try {
-        const messages = await Chat.find({ userId: req.params.userId })
-            .sort({ timestamp: 1 })
-            .limit(100);
-        res.json(messages);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+// Admin: Get chat history for a specific user
+router.get('/user/:userId', auth, role(['admin']), async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const chats = await Chat.find({ userId })
+      .populate('adminId', 'name')
+      .sort({ timestamp: 1 });
+    
+    res.json({ success: true, chats });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 module.exports = router;

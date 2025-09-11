@@ -43,6 +43,13 @@ exports.cookieAuth = async (req, res, next) => {
         }
         
         const decoded = await SessionManager.validateSession(token, req);
+        
+        // Support role switching for multi-role users
+        const requestedRole = req.headers['x-role-context'] || decoded.role;
+        if (decoded.roles && decoded.roles.includes(requestedRole)) {
+            decoded.role = requestedRole;
+        }
+        
         req.user = decoded;
         req.sessionId = decoded.sessionId;
         

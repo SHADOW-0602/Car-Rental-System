@@ -72,7 +72,7 @@ export default function DriverApplicationModal({ isOpen, onClose, onSuccess }) {
             });
 
             if (response.data.success) {
-                onSuccess('pending');
+                onSuccess(response.data.status || null);
                 alert('Application submitted successfully! We\'ll review it within 24-48 hours.');
             }
         } catch (error) {

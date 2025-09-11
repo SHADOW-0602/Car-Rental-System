@@ -1,7 +1,27 @@
 {
+  "name": "car-rental-system",
+  "version": "1.0.0",
+  "description": "Full-stack car rental system with React frontend and Node.js backend",
+  "main": "backend/server.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd backend && npm start",
+    "client": "cd frontend && npm start",
+    "build": "cd frontend && npm run build",
+    "install-deps": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "vercel-build": "cd frontend && npm install && npm run build"
+  },
+  "keywords": ["car-rental", "react", "nodejs", "mongodb", "vercel"],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
     "motion": "^12.23.12",
     "node-cron": "^4.2.1",
-    "nodemailer": "^7.0.5"
+    "nodemailer": "^7.0.5",
+    "reshaped": "^3.7.4",
+    "ua-parser-js": "^2.0.4"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   }
 }

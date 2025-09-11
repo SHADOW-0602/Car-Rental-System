@@ -18,6 +18,9 @@ router.get('/ride/:rideId', auth, role(['user', 'driver', 'admin']), ratingContr
 router.get('/my-ratings', auth, role(['user', 'driver']), ratingController.getMyRatings);
 router.get('/my-summary', auth, role(['user', 'driver']), ratingController.getMyRatingSummary);
 
+// Get driver dashboard stats
+router.get('/driver-stats', auth, role(['driver']), ratingController.getDriverStats);
+
 // Public rating views
 router.get('/user/:userId', ratingController.getUserRatings);
 router.get('/user/:userId/summary', ratingController.getUserRatingSummary);

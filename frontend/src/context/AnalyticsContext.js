@@ -19,7 +19,7 @@ export function AnalyticsProvider({ children }) {
         }
         
         const res = await axios.get(
-          `${config.API_BASE_URL}/admin/analytics`,
+          `${config.API_BASE_URL}/analytics`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         setStats(res.data);

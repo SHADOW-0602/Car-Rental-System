@@ -13,19 +13,32 @@ export default function DriverEarnings() {
   });
 
   useEffect(() => {
-    // Mock data - replace with actual API call
-    setEarnings({
-      today: 850,
-      thisWeek: 4200,
-      thisMonth: 18500,
-      total: 125000,
-      rides: [
-        { id: 1, date: '2024-01-15', from: 'Airport', to: 'Downtown', fare: 450, status: 'completed' },
-        { id: 2, date: '2024-01-15', from: 'Mall', to: 'Residential', fare: 280, status: 'completed' },
-        { id: 3, date: '2024-01-14', from: 'Hotel', to: 'Station', fare: 320, status: 'completed' }
-      ]
-    });
-  }, []);
+    const fetchEarnings = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/driver/earnings', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            setEarnings(data.earnings);
+          }
+        } else {
+          console.error('Failed to fetch earnings');
+        }
+      } catch (error) {
+        console.error('Error fetching earnings:', error);
+      }
+    };
+    
+    if (user?.role === 'driver') {
+      fetchEarnings();
+    }
+  }, [user]);
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
@@ -124,8 +137,11 @@ export default function DriverEarnings() {
                   <h4 style={{ margin: '0 0 5px 0', color: '#2d3748' }}>
                     {ride.from} → {ride.to}
                   </h4>
-                  <p style={{ margin: 0, color: '#718096', fontSize: '14px' }}>
+                  <p style={{ margin: '0 0 3px 0', color: '#718096', fontSize: '14px' }}>
                     {ride.date}
+                  </p>
+                  <p style={{ margin: 0, color: '#4a5568', fontSize: '12px' }}>
+                    Passenger: {ride.passenger || 'Unknown'}
                   </p>
                 </div>
                 <div style={{ textAlign: 'right' }}>

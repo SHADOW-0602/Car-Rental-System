@@ -74,7 +74,7 @@ const createRateLimit = (windowMs, max, message) => {
 // General API rate limit
 exports.generalLimiter = createRateLimit(
     15 * 60 * 1000, // 15 minutes
-    100, // 100 requests per window
+    1000, // 1000 requests per window
     'Too many requests, please try again later'
 );
 

@@ -33,4 +33,30 @@ router.post('/:paymentId/refund', auth, role(['admin']), role.auditLog('payment_
 // Get payment analytics (admin only)
 router.get('/admin/analytics', auth, role(['admin']), paymentController.getPaymentAnalytics);
 
+// Test endpoint to check payment initiation
+router.post('/test-initiate', auth, async (req, res) => {
+    try {
+        const { rideId } = req.body;
+        const Ride = require('../models/Ride');
+        
+        const ride = await Ride.findById(rideId).populate('user_id', 'name email phone');
+        
+        res.json({
+            success: true,
+            ride: ride ? {
+                id: ride._id,
+                status: ride.status,
+                payment_status: ride.payment_status,
+                user_id: ride.user_id?._id,
+                user_name: ride.user_id?.name,
+                fare: ride.fare
+            } : null,
+            requestUserId: req.user.id,
+            canPay: ride && ride.user_id._id.toString() === req.user.id && ride.status === 'completed'
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;

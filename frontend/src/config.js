@@ -1,10 +1,10 @@
 // Configuration file for the Car Rental System frontend
 const config = {
   // API Configuration
-  API_BASE_URL: process.env.REACT_APP_API_URL,
+  API_BASE_URL: process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:5000/api'),
   
   // Socket Configuration
-  SOCKET_URL: process.env.REACT_APP_SOCKET_URL,
+  SOCKET_URL: process.env.REACT_APP_SOCKET_URL || (process.env.NODE_ENV === 'production' ? window.location.origin : 'http://localhost:5000'),
   
   // App Configuration
   APP_NAME: 'UrbanFleet',

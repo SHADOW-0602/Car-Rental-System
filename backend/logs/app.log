@@ -149,3 +149,159 @@
 {"timestamp":"2025-08-23T12:43:56.295Z","level":"INFO","message":"✅ MongoDB connected successfully"}
 {"timestamp":"2025-08-24T12:18:02.168Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
 {"timestamp":"2025-08-24T12:18:03.460Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-26T06:53:15.877Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-26T06:53:19.464Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-30T06:08:56.422Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-30T06:08:59.386Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-30T06:15:18.934Z","level":"WARN","message":"[404] Route not found: GET /api/admin/users"}
+{"timestamp":"2025-08-30T06:15:18.943Z","level":"WARN","message":"[404] Route not found: GET /api/admin/drivers"}
+{"timestamp":"2025-08-30T06:15:18.946Z","level":"WARN","message":"[404] Route not found: GET /api/admin/trips"}
+{"timestamp":"2025-08-30T06:15:18.949Z","level":"WARN","message":"[404] Route not found: GET /api/admin/complaints"}
+{"timestamp":"2025-08-30T06:15:18.959Z","level":"WARN","message":"[404] Route not found: GET /api/admin/users"}
+{"timestamp":"2025-08-30T06:15:18.964Z","level":"WARN","message":"[404] Route not found: GET /api/admin/drivers"}
+{"timestamp":"2025-08-30T06:15:18.965Z","level":"WARN","message":"[404] Route not found: GET /api/admin/trips"}
+{"timestamp":"2025-08-30T06:15:18.968Z","level":"WARN","message":"[404] Route not found: GET /api/admin/complaints"}
+{"timestamp":"2025-08-30T06:15:52.610Z","level":"WARN","message":"[404] Route not found: GET /api/admin/users"}
+{"timestamp":"2025-08-30T06:15:52.628Z","level":"WARN","message":"[404] Route not found: GET /api/admin/users"}
+{"timestamp":"2025-08-30T06:15:52.631Z","level":"WARN","message":"[404] Route not found: GET /api/admin/drivers"}
+{"timestamp":"2025-08-30T06:15:52.635Z","level":"WARN","message":"[404] Route not found: GET /api/admin/trips"}
+{"timestamp":"2025-08-30T06:15:52.637Z","level":"WARN","message":"[404] Route not found: GET /api/admin/complaints"}
+{"timestamp":"2025-08-30T06:15:52.644Z","level":"WARN","message":"[404] Route not found: GET /api/admin/drivers"}
+{"timestamp":"2025-08-30T06:15:52.647Z","level":"WARN","message":"[404] Route not found: GET /api/admin/trips"}
+{"timestamp":"2025-08-30T06:15:52.649Z","level":"WARN","message":"[404] Route not found: GET /api/admin/complaints"}
+{"timestamp":"2025-08-30T06:33:18.193Z","level":"WARN","message":"[404] Route not found: GET /api/admin/users"}
+{"timestamp":"2025-08-30T06:33:18.198Z","level":"WARN","message":"[404] Route not found: GET /api/admin/drivers"}
+{"timestamp":"2025-08-30T06:33:18.200Z","level":"WARN","message":"[404] Route not found: GET /api/admin/trips"}
+{"timestamp":"2025-08-30T06:33:18.201Z","level":"WARN","message":"[404] Route not found: GET /api/admin/complaints"}
+{"timestamp":"2025-08-30T06:33:18.212Z","level":"WARN","message":"[404] Route not found: GET /api/admin/users"}
+{"timestamp":"2025-08-30T06:33:18.214Z","level":"WARN","message":"[404] Route not found: GET /api/admin/drivers"}
+{"timestamp":"2025-08-30T06:33:18.218Z","level":"WARN","message":"[404] Route not found: GET /api/admin/trips"}
+{"timestamp":"2025-08-30T06:33:18.219Z","level":"WARN","message":"[404] Route not found: GET /api/admin/complaints"}
+{"timestamp":"2025-08-30T06:33:40.886Z","level":"WARN","message":"[404] Route not found: GET /api/admin/users"}
+{"timestamp":"2025-08-30T06:33:40.889Z","level":"WARN","message":"[404] Route not found: GET /api/admin/trips"}
+{"timestamp":"2025-08-30T06:33:40.891Z","level":"WARN","message":"[404] Route not found: GET /api/admin/drivers"}
+{"timestamp":"2025-08-30T06:33:40.893Z","level":"WARN","message":"[404] Route not found: GET /api/admin/complaints"}
+{"timestamp":"2025-08-30T06:33:40.899Z","level":"WARN","message":"[404] Route not found: GET /api/admin/trips"}
+{"timestamp":"2025-08-30T06:33:40.900Z","level":"WARN","message":"[404] Route not found: GET /api/admin/users"}
+{"timestamp":"2025-08-30T06:33:40.902Z","level":"WARN","message":"[404] Route not found: GET /api/admin/drivers"}
+{"timestamp":"2025-08-30T06:33:40.904Z","level":"WARN","message":"[404] Route not found: GET /api/admin/complaints"}
+{"timestamp":"2025-08-30T06:34:09.357Z","level":"WARN","message":"[404] Route not found: GET /api/admin/users"}
+{"timestamp":"2025-08-30T06:34:09.360Z","level":"WARN","message":"[404] Route not found: GET /api/admin/drivers"}
+{"timestamp":"2025-08-30T06:34:09.362Z","level":"WARN","message":"[404] Route not found: GET /api/admin/trips"}
+{"timestamp":"2025-08-30T06:34:09.364Z","level":"WARN","message":"[404] Route not found: GET /api/admin/complaints"}
+{"timestamp":"2025-08-30T06:34:09.370Z","level":"WARN","message":"[404] Route not found: GET /api/admin/users"}
+{"timestamp":"2025-08-30T06:34:09.372Z","level":"WARN","message":"[404] Route not found: GET /api/admin/drivers"}
+{"timestamp":"2025-08-30T06:34:09.377Z","level":"WARN","message":"[404] Route not found: GET /api/admin/trips"}
+{"timestamp":"2025-08-30T06:34:09.378Z","level":"WARN","message":"[404] Route not found: GET /api/admin/complaints"}
+{"timestamp":"2025-08-30T06:34:42.048Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}
+{"timestamp":"2025-08-30T06:34:48.902Z","level":"WARN","message":"[404] Route not found: GET /api/admin/complaints"}
+{"timestamp":"2025-08-30T06:35:05.887Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-30T06:35:06.720Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-30T06:35:52.457Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}
+{"timestamp":"2025-08-30T06:37:30.756Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-30T06:37:31.637Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-30T07:20:15.939Z","level":"WARN","message":"[404] Route not found: PUT /api/admin/users/68a03556f9ee826aaeb0bf6f/status"}
+{"timestamp":"2025-08-30T07:21:23.450Z","level":"WARN","message":"[404] Route not found: PUT /api/admin/users/68a03556f9ee826aaeb0bf6f/status"}
+{"timestamp":"2025-08-30T07:21:31.393Z","level":"WARN","message":"[404] Route not found: PUT /api/admin/users/68a03556f9ee826aaeb0bf6f/status"}
+{"timestamp":"2025-08-30T07:21:47.617Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-30T07:21:48.691Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-30T07:32:08.260Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-30T07:32:09.412Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-30T08:15:13.112Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-30T08:15:43.207Z","level":"ERROR","message":"❌ MongoDB connection error:","data":{"message":"Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/","errorLabelSet":{},"reason":{"type":"ReplicaSetNoPrimary","servers":{"ac-wjcqtgm-shard-00-00.wirq50b.mongodb.net:27017":{"address":"ac-wjcqtgm-shard-00-00.wirq50b.mongodb.net:27017","type":"Unknown","hosts":[],"passives":[],"arbiters":[],"tags":{},"minWireVersion":0,"maxWireVersion":0,"roundTripTime":-1,"minRoundTripTime":0,"lastUpdateTime":63202396,"lastWriteDate":0,"error":{"errorLabelSet":{},"beforeHandshake":false},"topologyVersion":null,"setName":null,"setVersion":null,"electionId":null,"logicalSessionTimeoutMinutes":null,"maxMessageSizeBytes":null,"maxWriteBatchSize":null,"maxBsonObjectSize":null,"primary":null,"me":null,"$clusterTime":null,"iscryptd":false},"ac-wjcqtgm-shard-00-01.wirq50b.mongodb.net:27017":{"address":"ac-wjcqtgm-shard-00-01.wirq50b.mongodb.net:27017","type":"Unknown","hosts":[],"passives":[],"arbiters":[],"tags":{},"minWireVersion":0,"maxWireVersion":0,"roundTripTime":-1,"minRoundTripTime":0,"lastUpdateTime":63202397,"lastWriteDate":0,"error":{"errorLabelSet":{},"beforeHandshake":false},"topologyVersion":null,"setName":null,"setVersion":null,"electionId":null,"logicalSessionTimeoutMinutes":null,"maxMessageSizeBytes":null,"maxWriteBatchSize":null,"maxBsonObjectSize":null,"primary":null,"me":null,"$clusterTime":null,"iscryptd":false},"ac-wjcqtgm-shard-00-02.wirq50b.mongodb.net:27017":{"address":"ac-wjcqtgm-shard-00-02.wirq50b.mongodb.net:27017","type":"Unknown","hosts":[],"passives":[],"arbiters":[],"tags":{},"minWireVersion":0,"maxWireVersion":0,"roundTripTime":-1,"minRoundTripTime":0,"lastUpdateTime":63202396,"lastWriteDate":0,"error":{"errorLabelSet":{},"beforeHandshake":false},"topologyVersion":null,"setName":null,"setVersion":null,"electionId":null,"logicalSessionTimeoutMinutes":null,"maxMessageSizeBytes":null,"maxWriteBatchSize":null,"maxBsonObjectSize":null,"primary":null,"me":null,"$clusterTime":null,"iscryptd":false}},"stale":false,"compatible":true,"heartbeatFrequencyMS":10000,"localThresholdMS":15,"setName":"atlas-4jpbac-shard-0","maxElectionId":null,"maxSetVersion":null,"commonWireVersion":0,"logicalSessionTimeoutMinutes":null},"cause":{"type":"ReplicaSetNoPrimary","servers":{"ac-wjcqtgm-shard-00-00.wirq50b.mongodb.net:27017":{"address":"ac-wjcqtgm-shard-00-00.wirq50b.mongodb.net:27017","type":"Unknown","hosts":[],"passives":[],"arbiters":[],"tags":{},"minWireVersion":0,"maxWireVersion":0,"roundTripTime":-1,"minRoundTripTime":0,"lastUpdateTime":63202396,"lastWriteDate":0,"error":{"errorLabelSet":{},"beforeHandshake":false},"topologyVersion":null,"setName":null,"setVersion":null,"electionId":null,"logicalSessionTimeoutMinutes":null,"maxMessageSizeBytes":null,"maxWriteBatchSize":null,"maxBsonObjectSize":null,"primary":null,"me":null,"$clusterTime":null,"iscryptd":false},"ac-wjcqtgm-shard-00-01.wirq50b.mongodb.net:27017":{"address":"ac-wjcqtgm-shard-00-01.wirq50b.mongodb.net:27017","type":"Unknown","hosts":[],"passives":[],"arbiters":[],"tags":{},"minWireVersion":0,"maxWireVersion":0,"roundTripTime":-1,"minRoundTripTime":0,"lastUpdateTime":63202397,"lastWriteDate":0,"error":{"errorLabelSet":{},"beforeHandshake":false},"topologyVersion":null,"setName":null,"setVersion":null,"electionId":null,"logicalSessionTimeoutMinutes":null,"maxMessageSizeBytes":null,"maxWriteBatchSize":null,"maxBsonObjectSize":null,"primary":null,"me":null,"$clusterTime":null,"iscryptd":false},"ac-wjcqtgm-shard-00-02.wirq50b.mongodb.net:27017":{"address":"ac-wjcqtgm-shard-00-02.wirq50b.mongodb.net:27017","type":"Unknown","hosts":[],"passives":[],"arbiters":[],"tags":{},"minWireVersion":0,"maxWireVersion":0,"roundTripTime":-1,"minRoundTripTime":0,"lastUpdateTime":63202396,"lastWriteDate":0,"error":{"errorLabelSet":{},"beforeHandshake":false},"topologyVersion":null,"setName":null,"setVersion":null,"electionId":null,"logicalSessionTimeoutMinutes":null,"maxMessageSizeBytes":null,"maxWriteBatchSize":null,"maxBsonObjectSize":null,"primary":null,"me":null,"$clusterTime":null,"iscryptd":false}},"stale":false,"compatible":true,"heartbeatFrequencyMS":10000,"localThresholdMS":15,"setName":"atlas-4jpbac-shard-0","maxElectionId":null,"maxSetVersion":null,"commonWireVersion":0,"logicalSessionTimeoutMinutes":null}}}
+{"timestamp":"2025-08-30T09:31:26.680Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-30T09:31:57.196Z","level":"ERROR","message":"❌ MongoDB connection error:","data":{"message":"Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/","errorLabelSet":{},"reason":{"type":"ReplicaSetNoPrimary","servers":{"ac-wjcqtgm-shard-00-00.wirq50b.mongodb.net:27017":{"address":"ac-wjcqtgm-shard-00-00.wirq50b.mongodb.net:27017","type":"Unknown","hosts":[],"passives":[],"arbiters":[],"tags":{},"minWireVersion":0,"maxWireVersion":0,"roundTripTime":-1,"minRoundTripTime":0,"lastUpdateTime":67775696,"lastWriteDate":0,"error":{"errorLabelSet":{},"beforeHandshake":false},"topologyVersion":null,"setName":null,"setVersion":null,"electionId":null,"logicalSessionTimeoutMinutes":null,"maxMessageSizeBytes":null,"maxWriteBatchSize":null,"maxBsonObjectSize":null,"primary":null,"me":null,"$clusterTime":null,"iscryptd":false},"ac-wjcqtgm-shard-00-01.wirq50b.mongodb.net:27017":{"address":"ac-wjcqtgm-shard-00-01.wirq50b.mongodb.net:27017","type":"Unknown","hosts":[],"passives":[],"arbiters":[],"tags":{},"minWireVersion":0,"maxWireVersion":0,"roundTripTime":-1,"minRoundTripTime":0,"lastUpdateTime":67775695,"lastWriteDate":0,"error":{"errorLabelSet":{},"beforeHandshake":false},"topologyVersion":null,"setName":null,"setVersion":null,"electionId":null,"logicalSessionTimeoutMinutes":null,"maxMessageSizeBytes":null,"maxWriteBatchSize":null,"maxBsonObjectSize":null,"primary":null,"me":null,"$clusterTime":null,"iscryptd":false},"ac-wjcqtgm-shard-00-02.wirq50b.mongodb.net:27017":{"address":"ac-wjcqtgm-shard-00-02.wirq50b.mongodb.net:27017","type":"Unknown","hosts":[],"passives":[],"arbiters":[],"tags":{},"minWireVersion":0,"maxWireVersion":0,"roundTripTime":-1,"minRoundTripTime":0,"lastUpdateTime":67776445,"lastWriteDate":0,"error":{"errorLabelSet":{},"beforeHandshake":false},"topologyVersion":null,"setName":null,"setVersion":null,"electionId":null,"logicalSessionTimeoutMinutes":null,"maxMessageSizeBytes":null,"maxWriteBatchSize":null,"maxBsonObjectSize":null,"primary":null,"me":null,"$clusterTime":null,"iscryptd":false}},"stale":false,"compatible":true,"heartbeatFrequencyMS":10000,"localThresholdMS":15,"setName":"atlas-4jpbac-shard-0","maxElectionId":null,"maxSetVersion":null,"commonWireVersion":0,"logicalSessionTimeoutMinutes":null},"cause":{"type":"ReplicaSetNoPrimary","servers":{"ac-wjcqtgm-shard-00-00.wirq50b.mongodb.net:27017":{"address":"ac-wjcqtgm-shard-00-00.wirq50b.mongodb.net:27017","type":"Unknown","hosts":[],"passives":[],"arbiters":[],"tags":{},"minWireVersion":0,"maxWireVersion":0,"roundTripTime":-1,"minRoundTripTime":0,"lastUpdateTime":67775696,"lastWriteDate":0,"error":{"errorLabelSet":{},"beforeHandshake":false},"topologyVersion":null,"setName":null,"setVersion":null,"electionId":null,"logicalSessionTimeoutMinutes":null,"maxMessageSizeBytes":null,"maxWriteBatchSize":null,"maxBsonObjectSize":null,"primary":null,"me":null,"$clusterTime":null,"iscryptd":false},"ac-wjcqtgm-shard-00-01.wirq50b.mongodb.net:27017":{"address":"ac-wjcqtgm-shard-00-01.wirq50b.mongodb.net:27017","type":"Unknown","hosts":[],"passives":[],"arbiters":[],"tags":{},"minWireVersion":0,"maxWireVersion":0,"roundTripTime":-1,"minRoundTripTime":0,"lastUpdateTime":67775695,"lastWriteDate":0,"error":{"errorLabelSet":{},"beforeHandshake":false},"topologyVersion":null,"setName":null,"setVersion":null,"electionId":null,"logicalSessionTimeoutMinutes":null,"maxMessageSizeBytes":null,"maxWriteBatchSize":null,"maxBsonObjectSize":null,"primary":null,"me":null,"$clusterTime":null,"iscryptd":false},"ac-wjcqtgm-shard-00-02.wirq50b.mongodb.net:27017":{"address":"ac-wjcqtgm-shard-00-02.wirq50b.mongodb.net:27017","type":"Unknown","hosts":[],"passives":[],"arbiters":[],"tags":{},"minWireVersion":0,"maxWireVersion":0,"roundTripTime":-1,"minRoundTripTime":0,"lastUpdateTime":67776445,"lastWriteDate":0,"error":{"errorLabelSet":{},"beforeHandshake":false},"topologyVersion":null,"setName":null,"setVersion":null,"electionId":null,"logicalSessionTimeoutMinutes":null,"maxMessageSizeBytes":null,"maxWriteBatchSize":null,"maxBsonObjectSize":null,"primary":null,"me":null,"$clusterTime":null,"iscryptd":false}},"stale":false,"compatible":true,"heartbeatFrequencyMS":10000,"localThresholdMS":15,"setName":"atlas-4jpbac-shard-0","maxElectionId":null,"maxSetVersion":null,"commonWireVersion":0,"logicalSessionTimeoutMinutes":null}}}
+{"timestamp":"2025-08-30T09:33:32.533Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-30T09:33:35.568Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-30T09:43:10.044Z","level":"WARN","message":"[404] Route not found: PUT /api/admin/drivers/68a9a73a1fa4097c099a8ea8/status"}
+{"timestamp":"2025-08-30T09:44:04.959Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/users"}
+{"timestamp":"2025-08-30T09:44:04.967Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/drivers"}
+{"timestamp":"2025-08-30T09:44:04.968Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/trips"}
+{"timestamp":"2025-08-30T09:44:04.970Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/complaints"}
+{"timestamp":"2025-08-30T09:44:04.971Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/analytics"}
+{"timestamp":"2025-08-30T09:44:13.822Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/users"}
+{"timestamp":"2025-08-30T09:44:13.824Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/drivers"}
+{"timestamp":"2025-08-30T09:44:13.828Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/trips"}
+{"timestamp":"2025-08-30T09:44:13.832Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/chats"}
+{"timestamp":"2025-08-30T09:44:13.833Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/complaints"}
+{"timestamp":"2025-08-30T09:44:13.835Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/analytics"}
+{"timestamp":"2025-08-30T09:44:44.030Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/users"}
+{"timestamp":"2025-08-30T09:44:44.031Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/drivers"}
+{"timestamp":"2025-08-30T09:44:44.042Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/trips"}
+{"timestamp":"2025-08-30T09:44:44.044Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/complaints"}
+{"timestamp":"2025-08-30T09:44:44.046Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/analytics"}
+{"timestamp":"2025-08-30T09:45:09.775Z","level":"WARN","message":"[404] Route not found: PUT /api/admin/drivers/68a9a73a1fa4097c099a8ea8/status"}
+{"timestamp":"2025-08-30T09:47:34.013Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/users"}
+{"timestamp":"2025-08-30T09:47:34.016Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/drivers"}
+{"timestamp":"2025-08-30T09:47:34.018Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/trips"}
+{"timestamp":"2025-08-30T09:47:34.019Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/complaints"}
+{"timestamp":"2025-08-30T09:47:34.020Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/analytics"}
+{"timestamp":"2025-08-30T09:47:34.022Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/chats"}
+{"timestamp":"2025-08-30T09:48:00.248Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/users"}
+{"timestamp":"2025-08-30T09:48:00.253Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/drivers"}
+{"timestamp":"2025-08-30T09:48:00.256Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/trips"}
+{"timestamp":"2025-08-30T09:48:00.259Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/complaints"}
+{"timestamp":"2025-08-30T09:48:00.261Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/analytics"}
+{"timestamp":"2025-08-30T09:48:00.263Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/chats"}
+{"timestamp":"2025-08-30T09:48:00.266Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/users"}
+{"timestamp":"2025-08-30T09:48:00.268Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/drivers"}
+{"timestamp":"2025-08-30T09:48:00.270Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/trips"}
+{"timestamp":"2025-08-30T09:48:00.272Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/complaints"}
+{"timestamp":"2025-08-30T09:48:00.273Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/analytics"}
+{"timestamp":"2025-08-30T09:48:00.276Z","level":"WARN","message":"[404] Route not found: GET /api/api/admin/chats"}
+{"timestamp":"2025-08-30T09:49:28.721Z","level":"WARN","message":"[404] Route not found: PUT /api/admin/drivers/68a9a73a1fa4097c099a8ea8/status"}
+{"timestamp":"2025-08-30T09:51:41.192Z","level":"WARN","message":"[404] Route not found: PUT /api/admin/drivers/68a9a73a1fa4097c099a8ea8/status"}
+{"timestamp":"2025-08-30T09:52:17.652Z","level":"WARN","message":"[404] Route not found: GET /api/admin/test"}
+{"timestamp":"2025-08-30T09:52:24.278Z","level":"WARN","message":"[404] Route not found: GET /api/users"}
+{"timestamp":"2025-08-30T09:52:46.503Z","level":"WARN","message":"[404] Route not found: GET /api/admin/test"}
+{"timestamp":"2025-08-30T09:55:34.105Z","level":"WARN","message":"[404] Route not found: PUT /api/admin/drivers/68a9a73a1fa4097c099a8ea8/status"}
+{"timestamp":"2025-08-30T09:57:17.904Z","level":"WARN","message":"[404] Route not found: GET /"}
+{"timestamp":"2025-08-30T10:00:00.076Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-30T10:00:01.208Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-30T11:10:07.740Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-30T11:10:08.470Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-30T11:27:03.441Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-30T11:27:04.234Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-30T11:57:14.671Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-30T11:57:15.700Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-30T16:47:23.981Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-30T16:47:25.331Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-30T17:06:04.498Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-30T17:06:05.869Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-31T03:11:52.910Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-31T03:11:54.206Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-31T03:58:35.770Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-31T03:58:36.926Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-31T04:23:43.552Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-31T04:23:44.643Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-31T04:29:21.487Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-31T04:29:22.789Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-31T04:31:10.923Z","level":"ERROR","message":"[Server] Failed to start:","data":{"code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"::","port":5000}}
+{"timestamp":"2025-08-31T04:31:58.619Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-31T04:31:59.807Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-31T07:09:30.570Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-31T07:09:31.692Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-31T09:30:05.580Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-31T09:30:06.831Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-31T09:42:39.990Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-31T09:42:41.249Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-31T10:04:47.466Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-31T10:04:48.528Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-31T11:34:22.658Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-31T11:34:23.575Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-31T11:34:46.827Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-31T11:34:47.492Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-31T12:21:49.064Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-31T12:21:50.344Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-31T15:21:51.089Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-31T15:21:52.449Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-08-31T16:16:30.453Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-08-31T16:16:31.744Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-09-06T11:31:18.215Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-09-06T11:31:19.322Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-09-06T11:48:06.390Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-09-06T11:48:07.446Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-09-11T11:26:30.234Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-09-11T11:26:31.630Z","level":"INFO","message":"✅ MongoDB connected successfully"}
+{"timestamp":"2025-09-11T12:30:16.717Z","level":"INFO","message":"🚗 Car Rental API started on port 5000"}
+{"timestamp":"2025-09-11T12:30:17.594Z","level":"INFO","message":"✅ MongoDB connected successfully"}

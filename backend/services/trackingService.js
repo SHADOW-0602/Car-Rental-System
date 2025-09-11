@@ -10,10 +10,29 @@ class TripTracker {
 
     // Start tracking a trip
     startTracking(rideId, driverLocation, destination) {
+        // Validate and sanitize inputs
+        if (!rideId || typeof rideId !== 'string') {
+            throw new Error('Invalid ride ID');
+        }
+        if (!driverLocation || typeof driverLocation.latitude !== 'number' || typeof driverLocation.longitude !== 'number') {
+            throw new Error('Invalid driver location');
+        }
+        if (!destination || typeof destination.latitude !== 'number' || typeof destination.longitude !== 'number') {
+            throw new Error('Invalid destination');
+        }
+        
         const tripData = {
-            rideId,
-            currentLocation: driverLocation,
-            destination,
+            rideId: String(rideId),
+            currentLocation: {
+                latitude: Number(driverLocation.latitude),
+                longitude: Number(driverLocation.longitude),
+                address: String(driverLocation.address || 'Starting location')
+            },
+            destination: {
+                latitude: Number(destination.latitude),
+                longitude: Number(destination.longitude),
+                address: String(destination.address || 'Destination')
+            },
             startTime: new Date(),
             totalDistance: calculateDistance(
                 driverLocation.latitude, driverLocation.longitude,
@@ -61,7 +80,7 @@ class TripTracker {
             trip.currentLocation.longitude += stepLon;
 
             // Calculate ETA (assuming 40 km/h average speed)
-            const eta = Math.ceil(remainingDistance / 40 * 60); // minutes
+            const eta = Math.ceil((remainingDistance / 40) * 60); // minutes
 
             const update = {
                 rideId,
@@ -72,8 +91,30 @@ class TripTracker {
                 timestamp: new Date()
             };
 
-            // Emit to specific ride room
-            this.io.to(`ride_${rideId}`).emit('locationUpdate', update);
+            // Emit to specific ride room with sanitized data
+            const sanitizedUpdate = {
+                rideId: String(rideId),
+                currentLocation: {
+                    latitude: Number(trip.currentLocation.latitude),
+                    longitude: Number(trip.currentLocation.longitude),
+                    address: String(trip.currentLocation.address || 'In transit')
+                },
+                remainingDistance: Number(Math.round(remainingDistance * 100) / 100),
+                eta: Number(eta),
+                status: String(trip.status),
+                timestamp: new Date()
+            };
+            this.io.to(`ride_${String(rideId)}`).emit('locationUpdate', sanitizedUpdate);
+            
+            // Also emit general location update for admin monitoring with sanitized data
+            this.io.emit('driverLocationUpdate', {
+                driverId: String(trip.driverId || `trip_${rideId}`),
+                latitude: Number(trip.currentLocation.latitude),
+                longitude: Number(trip.currentLocation.longitude),
+                address: String(trip.currentLocation.address || 'In transit'),
+                status: 'busy',
+                timestamp: new Date()
+            });
             
         }, 3000); // Update every 3 seconds
 
@@ -87,10 +128,10 @@ class TripTracker {
             trip.status = 'completed';
             trip.endTime = new Date();
             
-            this.io.to(`ride_${rideId}`).emit('tripCompleted', {
-                rideId,
+            this.io.to(`ride_${String(rideId)}`).emit('tripCompleted', {
+                rideId: String(rideId),
                 message: 'Trip completed successfully',
-                duration: Math.ceil((trip.endTime - trip.startTime) / 60000), // minutes
+                duration: Number(Math.ceil((trip.endTime - trip.startTime) / 60000)), // minutes
                 timestamp: new Date()
             });
 
@@ -98,7 +139,9 @@ class TripTracker {
             Ride.findByIdAndUpdate(rideId, { 
                 status: 'completed',
                 completed_at: new Date()
-            }).catch(console.error);
+            }).catch(error => {
+                console.error(`Failed to update ride ${encodeURIComponent(rideId)}:`, error.message);
+            });
         }
 
         this.stopTracking(rideId);
@@ -121,6 +164,10 @@ class TripTracker {
 
     // Update driver location manually
     updateDriverLocation(rideId, location) {
+        if (!location || typeof location.latitude !== 'number' || typeof location.longitude !== 'number') {
+            return null;
+        }
+        
         const trip = this.activeTrips.get(rideId);
         if (trip) {
             trip.currentLocation = location;
@@ -130,18 +177,33 @@ class TripTracker {
                 trip.destination.latitude, trip.destination.longitude
             );
             
-            const eta = Math.ceil(remainingDistance / 40 * 60);
+            const eta = Math.ceil((remainingDistance / 40) * 60);
 
             const update = {
-                rideId,
-                currentLocation: location,
-                remainingDistance: Math.round(remainingDistance * 100) / 100,
-                eta,
-                status: trip.status,
+                rideId: String(rideId),
+                currentLocation: {
+                    latitude: Number(location.latitude),
+                    longitude: Number(location.longitude),
+                    address: String(location.address || 'Updated location')
+                },
+                remainingDistance: Number(Math.round(remainingDistance * 100) / 100),
+                eta: Number(eta),
+                status: String(trip.status),
                 timestamp: new Date()
             };
 
-            this.io.to(`ride_${rideId}`).emit('locationUpdate', update);
+            this.io.to(`ride_${String(rideId)}`).emit('locationUpdate', update);
+            
+            // Also emit general location update for admin monitoring with sanitized data
+            this.io.emit('driverLocationUpdate', {
+                driverId: String(trip.driverId || `manual_${rideId}`),
+                latitude: Number(location.latitude),
+                longitude: Number(location.longitude),
+                address: String(location.address || 'Updated location'),
+                status: 'busy',
+                timestamp: new Date()
+            });
+            
             return update;
         }
         return null;

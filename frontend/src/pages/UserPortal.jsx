@@ -3,12 +3,15 @@ import { motion } from 'framer-motion';
 import { useAuthContext } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import MapPicker from '../components/MapPicker';
-import AIChat from '../components/AIChat';
+import RideTracker from '../components/RideTracker';
+import api from '../services/api';
+
 
 import { haversineDistance } from '../utils/distance';
 import { fadeIn, slideUp, staggerContainer, staggerItem, scaleIn } from '../animations/variants';
 import { AnimatedButton, AnimatedCard, AnimatedContainer } from '../animations/AnimatedComponents';
 import { ScrollFadeIn, ScrollSlideLeft, ScrollSlideRight, ScrollScale } from '../animations/ScrollAnimatedComponents';
+
 
 export default function UserPortal({ user: propUser }) {
     const { user: contextUser } = useAuthContext();
@@ -19,6 +22,8 @@ export default function UserPortal({ user: propUser }) {
     });
     const [pickupLocation, setPickupLocation] = useState(null);
     const [destinationLocation, setDestinationLocation] = useState(null);
+    const [rideHistory, setRideHistory] = useState([]);
+    const [activeTab, setActiveTab] = useState('book');
 
     const handlePickupSelect = (location) => {
         setPickupLocation(location);
@@ -65,6 +70,24 @@ export default function UserPortal({ user: propUser }) {
     const [distance, setDistance] = useState(0);
     const [showChat, setShowChat] = useState(false);
 
+    // Fetch ride history
+    useEffect(() => {
+        if (user) {
+            fetchRideHistory();
+        }
+    }, [user]);
+
+    const fetchRideHistory = async () => {
+        try {
+            const response = await api.get('/rides/user');
+            if (response.data.success) {
+                setRideHistory(response.data.rides);
+            }
+        } catch (error) {
+            console.error('Failed to fetch ride history:', error);
+        }
+    };
+
     const handleBookRide = () => {
         if (!user) {
             if (pickupLocation && destinationLocation) {
@@ -86,22 +109,33 @@ export default function UserPortal({ user: propUser }) {
         setBookingStep('payment');
     };
 
-    const handlePaymentSuccess = () => {
-        const pin = Math.floor(1000 + Math.random() * 9000);
-        setRidePin(pin);
-        
-        const details = {
-            id: 'RIDE' + Date.now(),
-            pickup: pickupLocation.address,
-            destination: destinationLocation.address,
-            vehicle: selectedVehicle,
-            fare: selectedVehicle.estimatedFare,
-            pin: pin,
-            status: 'confirmed',
-            createdAt: new Date().toISOString()
-        };
-        setRideDetails(details);
-        setBookingStep('confirmation');
+    const handlePaymentSuccess = async (paymentMethod) => {
+        try {
+            const rideData = {
+                pickup_location: {
+                    address: pickupLocation.address,
+                    latitude: pickupLocation.latitude,
+                    longitude: pickupLocation.longitude
+                },
+                drop_location: {
+                    address: destinationLocation.address,
+                    latitude: destinationLocation.latitude,
+                    longitude: destinationLocation.longitude
+                },
+                vehicle_type: selectedVehicle.type,
+                payment_method: paymentMethod
+            };
+            
+            const response = await api.post('/rides/request', rideData);
+            
+            if (response.data.success) {
+                // Redirect to track ride page
+                window.location.href = `/track-ride/${response.data.ride._id}`;
+            }
+        } catch (error) {
+            console.error('Failed to create ride:', error);
+            alert(error.response?.data?.error || 'Failed to create ride. Please try again.');
+        }
     };
 
     const resetBooking = () => {
@@ -714,10 +748,27 @@ export default function UserPortal({ user: propUser }) {
                 style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 20px' }}
             >
                 <h1 style={{ fontSize: '2.5rem', fontWeight: '700', marginBottom: '30px', color: '#2d3748' }}>
-                    Welcome back! 🚗
+                    Welcome back, {user.name}! 🚗
                 </h1>
                 
+                {/* Tab Navigation */}
+                <div className="tab-navigation" style={{ marginBottom: '30px' }}>
+                    <button 
+                        onClick={() => setActiveTab('book')}
+                        className={`tab-btn ${activeTab === 'book' ? 'active' : ''}`}
+                    >
+                        🚗 Book Ride
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('history')}
+                        className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`}
+                    >
+                        📋 Ride History
+                    </button>
+                </div>
+                
                 {/* Booking Form for Authenticated Users */}
+                {activeTab === 'book' && (
                 <AnimatedCard style={{ backgroundColor: 'white', padding: '40px', borderRadius: '20px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', marginBottom: '40px' }}>
                     <h2 style={{ marginBottom: '30px', color: '#2d3748' }}>Book Your Ride</h2>
                     
@@ -830,7 +881,13 @@ export default function UserPortal({ user: propUser }) {
                                             onClick={() => handleVehicleSelect({...vehicle, estimatedFare, distance})}
                                         >
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                                <div style={{ fontSize: '32px' }}>{vehicle.icon}</div>
+                                                <div style={{ fontSize: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px' }}>
+                                                    {vehicle.type === 'bike' ? (
+                                                        <img src="/assets/Bike Symbol.png" alt="Bike" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
+                                                    ) : (
+                                                        vehicle.icon
+                                                    )}
+                                                </div>
                                                 <div>
                                                     <h4 style={{ margin: '0 0 5px 0', color: '#2d3748' }}>{vehicle.name}</h4>
                                                     <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>{vehicle.time}</p>
@@ -854,7 +911,7 @@ export default function UserPortal({ user: propUser }) {
 
                     {bookingStep === 'payment' && selectedVehicle && (
                         <div style={{ marginTop: '30px' }}>
-                            <h3 style={{ textAlign: 'center', marginBottom: '20px', color: '#2d3748' }}>Payment</h3>
+                            <h3 style={{ textAlign: 'center', marginBottom: '20px', color: '#2d3748' }}>Choose Payment Method</h3>
                             <div style={{ backgroundColor: '#f8fafc', padding: '20px', borderRadius: '15px', marginBottom: '20px' }}>
                                 <h4 style={{ margin: '0 0 10px 0', color: '#2d3748' }}>Ride Summary</h4>
                                 <p style={{ margin: '5px 0', color: '#64748b' }}>Vehicle: {selectedVehicle.name} {selectedVehicle.icon}</p>
@@ -863,11 +920,42 @@ export default function UserPortal({ user: propUser }) {
                                 <p style={{ margin: '10px 0 0 0', fontSize: '18px', fontWeight: '600', color: '#22c55e' }}>Total: ₹{selectedVehicle.estimatedFare}</p>
                             </div>
                             <div style={{ display: 'grid', gap: '10px', marginBottom: '20px' }}>
-                                {['Credit/Debit Card', 'UPI', 'Wallet', 'Cash'].map(method => (
-                                    <button key={method} onClick={handlePaymentSuccess} style={{
-                                        padding: '15px', backgroundColor: 'white', border: '2px solid #e2e8f0', borderRadius: '10px', cursor: 'pointer'
-                                    }}>
-                                        {method === 'Credit/Debit Card' ? '💳' : method === 'UPI' ? '📱' : method === 'Wallet' ? '💼' : '💵'} {method}
+                                {[
+                                    { name: 'Razorpay', value: 'razorpay', icon: '💳', desc: 'UPI/Card/Wallet' },
+                                    { name: 'Stripe', value: 'stripe', icon: '💳', desc: 'International Cards' },
+                                    { name: 'PayPal', value: 'paypal', icon: '🅿️', desc: 'PayPal Account' },
+                                    { name: 'Cash', value: 'cash', icon: '💵', desc: 'Pay Driver Directly' }
+                                ].map(method => (
+                                    <button 
+                                        key={method.value} 
+                                        onClick={() => handlePaymentSuccess(method.value)} 
+                                        style={{
+                                            padding: '15px', 
+                                            backgroundColor: 'white', 
+                                            border: '2px solid #e2e8f0', 
+                                            borderRadius: '10px', 
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            transition: 'all 0.3s ease'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.target.style.borderColor = '#667eea';
+                                            e.target.style.backgroundColor = '#f8fafc';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.target.style.borderColor = '#e2e8f0';
+                                            e.target.style.backgroundColor = 'white';
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <span style={{ fontSize: '20px' }}>{method.icon}</span>
+                                            <div style={{ textAlign: 'left' }}>
+                                                <div style={{ fontWeight: '600', color: '#2d3748' }}>{method.name}</div>
+                                                <div style={{ fontSize: '12px', color: '#64748b' }}>{method.desc}</div>
+                                            </div>
+                                        </div>
                                     </button>
                                 ))}
                             </div>
@@ -879,28 +967,156 @@ export default function UserPortal({ user: propUser }) {
                         </div>
                     )}
 
-                    {bookingStep === 'confirmation' && rideDetails && (
-                        <div style={{ marginTop: '30px', textAlign: 'center' }}>
-                            <div style={{ fontSize: '48px', marginBottom: '20px' }}>✅</div>
-                            <h3 style={{ color: '#22c55e', marginBottom: '20px' }}>Ride Confirmed!</h3>
-                            <div style={{ backgroundColor: '#f0f9ff', padding: '25px', borderRadius: '15px', marginBottom: '20px' }}>
-                                <h4 style={{ margin: '0 0 15px 0', color: '#2d3748' }}>Your Ride PIN</h4>
-                                <div style={{ fontSize: '32px', fontWeight: '700', color: '#667eea', marginBottom: '10px' }}>{ridePin}</div>
-                                <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>Share this PIN with your driver</p>
-                            </div>
-                            <div style={{ backgroundColor: '#f8fafc', padding: '20px', borderRadius: '15px', marginBottom: '20px', textAlign: 'left' }}>
-                                <h4 style={{ margin: '0 0 10px 0', color: '#2d3748' }}>Ride Details</h4>
-                                <p style={{ margin: '5px 0', color: '#64748b' }}><strong>Ride ID:</strong> {rideDetails.id}</p>
-                                <p style={{ margin: '5px 0', color: '#64748b' }}><strong>Vehicle:</strong> {rideDetails.vehicle.name}</p>
-                                <p style={{ margin: '5px 0', color: '#64748b' }}><strong>Fare:</strong> ₹{rideDetails.fare}</p>
-                                <p style={{ margin: '5px 0', color: '#64748b' }}><strong>Status:</strong> Waiting for driver</p>
-                            </div>
-                            <button onClick={resetBooking} style={{
-                                padding: '15px 30px', backgroundColor: '#667eea', color: 'white', border: 'none', borderRadius: '25px'
-                            }}>Book Another Ride</button>
+
+                </AnimatedCard>
+                )}
+                
+                {/* Ride History Section */}
+                {activeTab === 'history' && (
+                <AnimatedCard style={{ backgroundColor: 'white', padding: '40px', borderRadius: '20px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', marginBottom: '40px' }}>
+                    <h2 style={{ marginBottom: '30px', color: '#2d3748' }}>Your Ride History</h2>
+                    
+                    {rideHistory.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#64748b' }}>
+                            <div style={{ fontSize: '64px', marginBottom: '20px' }}>🚗</div>
+                            <h3 style={{ color: '#2d3748', marginBottom: '10px' }}>No rides yet</h3>
+                            <p>Book your first ride to see your history here!</p>
+                            <button 
+                                onClick={() => setActiveTab('book')}
+                                className="btn btn-primary"
+                                style={{ marginTop: '20px' }}
+                            >
+                                🚀 Book Your First Ride
+                            </button>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'grid', gap: '20px' }}>
+                            {rideHistory.map((ride) => (
+                                <div 
+                                    key={ride._id} 
+                                    className="ride-history-card"
+                                    style={{
+                                        border: '2px solid #e2e8f0',
+                                        borderRadius: '15px',
+                                        padding: '20px',
+                                        transition: 'all 0.3s ease',
+                                        cursor: 'pointer'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.target.style.borderColor = '#667eea';
+                                        e.target.style.transform = 'translateY(-2px)';
+                                        e.target.style.boxShadow = '0 8px 25px rgba(0,0,0,0.1)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.target.style.borderColor = '#e2e8f0';
+                                        e.target.style.transform = 'translateY(0)';
+                                        e.target.style.boxShadow = 'none';
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <div style={{
+                                                width: '40px',
+                                                height: '40px',
+                                                borderRadius: '50%',
+                                                backgroundColor: 
+                                                    ride.status === 'completed' ? '#22c55e' :
+                                                    ride.status === 'cancelled' ? '#ef4444' :
+                                                    ride.status === 'in_progress' ? '#f59e0b' : '#667eea',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                color: 'white',
+                                                fontSize: '18px'
+                                            }}>
+                                                {ride.status === 'completed' ? '✅' :
+                                                 ride.status === 'cancelled' ? '❌' :
+                                                 ride.status === 'in_progress' ? '🚗' : '⏳'}
+                                            </div>
+                                            <div>
+                                                <h4 style={{ margin: '0 0 4px 0', color: '#2d3748' }}>
+                                                    Trip #{ride._id.slice(-6).toUpperCase()}
+                                                </h4>
+                                                <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
+                                                    {new Date(ride.createdAt).toLocaleDateString('en-US', {
+                                                        year: 'numeric',
+                                                        month: 'short',
+                                                        day: 'numeric',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit'
+                                                    })}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div style={{
+                                                padding: '4px 12px',
+                                                borderRadius: '12px',
+                                                fontSize: '12px',
+                                                fontWeight: '600',
+                                                backgroundColor:
+                                                    ride.status === 'completed' ? '#dcfce7' :
+                                                    ride.status === 'cancelled' ? '#fef2f2' :
+                                                    ride.status === 'in_progress' ? '#fef3c7' : '#dbeafe',
+                                                color:
+                                                    ride.status === 'completed' ? '#16a34a' :
+                                                    ride.status === 'cancelled' ? '#dc2626' :
+                                                    ride.status === 'in_progress' ? '#d97706' : '#2563eb'
+                                            }}>
+                                                {ride.status.replace('_', ' ').toUpperCase()}
+                                            </div>
+                                            <div style={{ fontSize: '18px', fontWeight: '700', color: '#22c55e', marginTop: '8px' }}>
+                                                ₹{ride.fare || 0}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style={{ display: 'grid', gap: '12px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <span style={{ color: '#22c55e', fontSize: '16px' }}>📍</span>
+                                            <span style={{ color: '#2d3748', fontSize: '14px', fontWeight: '500' }}>
+                                                From: {ride.pickup_location?.address || 'Unknown location'}
+                                            </span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <span style={{ color: '#ef4444', fontSize: '16px' }}>🎯</span>
+                                            <span style={{ color: '#2d3748', fontSize: '14px', fontWeight: '500' }}>
+                                                To: {ride.drop_location?.address || 'Unknown location'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #f1f5f9' }}>
+                                        <div style={{ display: 'flex', gap: '20px' }}>
+                                            <div style={{ fontSize: '12px', color: '#64748b' }}>
+                                                <span style={{ fontWeight: '600' }}>Distance:</span> {ride.distance?.toFixed(1) || 0} km
+                                            </div>
+                                            <div style={{ fontSize: '12px', color: '#64748b' }}>
+                                                <span style={{ fontWeight: '600' }}>Vehicle:</span> {ride.vehicle_type || 'N/A'}
+                                            </div>
+                                            {ride.driver_id && (
+                                                <div style={{ fontSize: '12px', color: '#64748b' }}>
+                                                    <span style={{ fontWeight: '600' }}>Driver:</span> {ride.driver_id.name}
+                                                </div>
+                                            )}
+                                        </div>
+                                        
+                                        {(ride.status === 'accepted' || ride.status === 'in_progress') && (
+                                            <button 
+                                                onClick={() => window.location.href = `/track-ride/${ride._id}`}
+                                                className="btn btn-primary"
+                                                style={{ padding: '6px 16px', fontSize: '12px' }}
+                                            >
+                                                📍 Track Ride
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     )}
                 </AnimatedCard>
+                )}
                 
                 {/* Live Chat Support */}
                 <motion.div style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 1000 }}>
@@ -946,10 +1162,27 @@ export default function UserPortal({ user: propUser }) {
                                 ×
                             </button>
                             {user ? (
-                                <AIChat onTransferToHuman={() => {
-                                    alert('Connecting you to a human agent...');
-                                    setShowChat(false);
-                                }} />
+                                <div style={{
+                                    backgroundColor: 'white',
+                                    borderRadius: '15px',
+                                    padding: '20px',
+                                    boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+                                    width: '300px'
+                                }}>
+                                    <h3 style={{ margin: '0 0 15px 0', color: '#2d3748' }}>💬 Chat Support</h3>
+                                    <p style={{ margin: '0 0 15px 0', color: '#64748b', fontSize: '14px' }}>
+                                        Chat feature is currently unavailable. Please contact support directly.
+                                    </p>
+                                    <a href="/contact" style={{
+                                        padding: '8px 16px',
+                                        backgroundColor: '#667eea',
+                                        color: 'white',
+                                        textDecoration: 'none',
+                                        borderRadius: '20px',
+                                        fontSize: '12px',
+                                        fontWeight: '600'
+                                    }}>Contact Support</a>
+                                </div>
                             ) : (
                                 <div style={{
                                     backgroundColor: 'white',
@@ -988,6 +1221,7 @@ export default function UserPortal({ user: propUser }) {
                     )}
                 </motion.div>
             </AnimatedContainer>
+
         </div>
     );
 }

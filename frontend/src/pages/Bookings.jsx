@@ -264,24 +264,44 @@ export default function Bookings() {
                 )}
 
                 {/* Additional Details */}
-                {ride.fare && (
-                  <div style={{
-                    padding: '15px',
-                    backgroundColor: '#f0fff4',
-                    borderRadius: '12px',
-                    border: '1px solid #9ae6b4',
-                    textAlign: 'center'
-                  }}>
-                    <p style={{
-                      color: '#22543d',
-                      margin: 0,
-                      fontSize: '16px',
-                      fontWeight: '600'
+                <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                  {ride.fare && (
+                    <div style={{
+                      flex: 1,
+                      padding: '15px',
+                      backgroundColor: '#f0fff4',
+                      borderRadius: '12px',
+                      border: '1px solid #9ae6b4',
+                      textAlign: 'center'
                     }}>
-                      💰 Total Fare: ₹{ride.fare}
-                    </p>
-                  </div>
-                )}
+                      <p style={{
+                        color: '#22543d',
+                        margin: 0,
+                        fontSize: '16px',
+                        fontWeight: '600'
+                      }}>
+                        💰 Total Fare: ₹{ride.fare}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {ride.status === 'in_progress' && (
+                    <a 
+                      href={`/track-ride/${ride._id}`}
+                      style={{
+                        padding: '12px 20px',
+                        backgroundColor: '#667eea',
+                        color: 'white',
+                        textDecoration: 'none',
+                        borderRadius: '8px',
+                        fontWeight: '600',
+                        fontSize: '14px'
+                      }}
+                    >
+                      🚗 Track Live
+                    </a>
+                  )}
+                </div>
               </div>
             ))}
           </div>

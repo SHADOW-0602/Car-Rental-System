@@ -1,14 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import config from '../config';
+import api from '../services/api';
 
 export default function AdminAnalytics() {
   const [analytics, setAnalytics] = useState({
-    totalUsers: 0,
-    totalDrivers: 0,
-    totalRides: 0,
-    monthlyData: [],
-    recentActivity: []
+    summary: {
+      totalRides: 0,
+      totalRevenue: 0,
+      averageRating: 0,
+      completionRate: 0,
+      dailyData: []
+    },
+    today: {
+      rides: 0,
+      revenue: 0,
+      activeDrivers: 0,
+      totalUsers: 0
+    }
   });
   const [loading, setLoading] = useState(true);
 
@@ -18,30 +25,23 @@ export default function AdminAnalytics() {
 
   const fetchAnalytics = async () => {
     try {
-      // Mock data for now - replace with actual API calls
-      const mockData = {
-        totalUsers: 1250,
-        totalDrivers: 340,
-        totalRides: 5680,
-        monthlyData: [
-          { month: 'Jan', users: 100, drivers: 25, rides: 450 },
-          { month: 'Feb', users: 150, drivers: 35, rides: 620 },
-          { month: 'Mar', users: 200, drivers: 45, rides: 780 },
-          { month: 'Apr', users: 280, drivers: 60, rides: 920 },
-          { month: 'May', users: 350, drivers: 75, rides: 1100 },
-          { month: 'Jun', users: 420, drivers: 90, rides: 1350 }
-        ],
-        recentActivity: [
-          { type: 'user_signup', count: 15, time: '2 hours ago' },
-          { type: 'driver_signup', count: 3, time: '4 hours ago' },
-          { type: 'ride_completed', count: 45, time: '1 hour ago' }
-        ]
-      };
-      setAnalytics(mockData);
+      const response = await api.get('/admin/analytics');
+      if (response.data.success) {
+        setAnalytics(response.data.data);
+      }
       setLoading(false);
     } catch (error) {
       console.error('Error fetching analytics:', error);
       setLoading(false);
+    }
+  };
+
+  const generateAnalytics = async () => {
+    try {
+      await api.post('/admin/analytics/generate');
+      fetchAnalytics();
+    } catch (error) {
+      console.error('Error generating analytics:', error);
     }
   };
 
@@ -58,7 +58,26 @@ export default function AdminAnalytics() {
     <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
       <h2 style={{ marginBottom: '30px', color: '#2d3748' }}>📊 Analytics Dashboard</h2>
       
-      {/* Stats Cards */}
+      {/* Header with Generate Button */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+        <h2 style={{ margin: 0, color: '#2d3748' }}>📊 Real-Time Analytics Dashboard</h2>
+        <button 
+          onClick={generateAnalytics}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#667eea',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '14px'
+          }}
+        >
+          🔄 Generate Analytics
+        </button>
+      </div>
+
+      {/* Today's Stats */}
       <div style={{ 
         display: 'grid', 
         gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
@@ -84,7 +103,7 @@ export default function AdminAnalytics() {
               fontSize: '24px'
             }}>👥</div>
             <div>
-              <h3 style={{ margin: 0, fontSize: '28px', color: '#2d3748' }}>{analytics.totalUsers}</h3>
+              <h3 style={{ margin: 0, fontSize: '28px', color: '#2d3748' }}>{analytics.today.totalUsers}</h3>
               <p style={{ margin: 0, color: '#718096' }}>Total Users</p>
             </div>
           </div>
@@ -109,8 +128,8 @@ export default function AdminAnalytics() {
               fontSize: '24px'
             }}>🚕</div>
             <div>
-              <h3 style={{ margin: 0, fontSize: '28px', color: '#2d3748' }}>{analytics.totalDrivers}</h3>
-              <p style={{ margin: 0, color: '#718096' }}>Total Drivers</p>
+              <h3 style={{ margin: 0, fontSize: '28px', color: '#2d3748' }}>{analytics.today.activeDrivers}</h3>
+              <p style={{ margin: 0, color: '#718096' }}>Active Drivers</p>
             </div>
           </div>
         </div>
@@ -134,14 +153,88 @@ export default function AdminAnalytics() {
               fontSize: '24px'
             }}>🚗</div>
             <div>
-              <h3 style={{ margin: 0, fontSize: '28px', color: '#2d3748' }}>{analytics.totalRides}</h3>
-              <p style={{ margin: 0, color: '#718096' }}>Total Rides</p>
+              <h3 style={{ margin: 0, fontSize: '28px', color: '#2d3748' }}>{analytics.today.rides}</h3>
+              <p style={{ margin: 0, color: '#718096' }}>Today's Rides</p>
+            </div>
+          </div>
+        </div>
+
+        <div style={{
+          backgroundColor: 'white',
+          padding: '25px',
+          borderRadius: '15px',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+          border: '2px solid #e2e8f0'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <div style={{
+              width: '50px',
+              height: '50px',
+              backgroundColor: '#38b2ac',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '24px'
+            }}>💰</div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '28px', color: '#2d3748' }}>₹{analytics.today.revenue}</h3>
+              <p style={{ margin: 0, color: '#718096' }}>Today's Revenue</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Monthly Growth Chart */}
+      {/* Summary Stats */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+        gap: '20px', 
+        marginBottom: '40px' 
+      }}>
+        <div style={{
+          backgroundColor: 'white',
+          padding: '20px',
+          borderRadius: '12px',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+          textAlign: 'center'
+        }}>
+          <h4 style={{ margin: '0 0 10px 0', color: '#2d3748' }}>Total Rides (30 days)</h4>
+          <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#667eea' }}>{analytics.summary.totalRides}</p>
+        </div>
+        <div style={{
+          backgroundColor: 'white',
+          padding: '20px',
+          borderRadius: '12px',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+          textAlign: 'center'
+        }}>
+          <h4 style={{ margin: '0 0 10px 0', color: '#2d3748' }}>Total Revenue</h4>
+          <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#48bb78' }}>₹{analytics.summary.totalRevenue}</p>
+        </div>
+        <div style={{
+          backgroundColor: 'white',
+          padding: '20px',
+          borderRadius: '12px',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+          textAlign: 'center'
+        }}>
+          <h4 style={{ margin: '0 0 10px 0', color: '#2d3748' }}>Average Rating</h4>
+          <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#ed8936' }}>{analytics.summary.averageRating.toFixed(1)}/5 ⭐</p>
+        </div>
+        <div style={{
+          backgroundColor: 'white',
+          padding: '20px',
+          borderRadius: '12px',
+          boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+          textAlign: 'center'
+        }}>
+          <h4 style={{ margin: '0 0 10px 0', color: '#2d3748' }}>Completion Rate</h4>
+          <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#38b2ac' }}>{analytics.summary.completionRate.toFixed(1)}%</p>
+        </div>
+      </div>
+
+      {/* Daily Trend Chart */}
       <div style={{
         backgroundColor: 'white',
         padding: '30px',
@@ -149,109 +242,74 @@ export default function AdminAnalytics() {
         boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
         marginBottom: '30px'
       }}>
-        <h3 style={{ marginBottom: '25px', color: '#2d3748' }}>📈 Monthly Growth</h3>
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'end', 
-          gap: '20px', 
-          height: '300px',
-          padding: '20px 0'
-        }}>
-          {analytics.monthlyData.map((data, index) => (
-            <div key={index} style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              alignItems: 'center',
-              flex: 1
-            }}>
-              <div style={{ display: 'flex', gap: '5px', alignItems: 'end' }}>
-                <div style={{
-                  width: '20px',
-                  height: `${(data.users / 500) * 200}px`,
-                  backgroundColor: '#667eea',
-                  borderRadius: '4px 4px 0 0',
-                  minHeight: '10px'
-                }}></div>
-                <div style={{
-                  width: '20px',
-                  height: `${(data.drivers / 100) * 200}px`,
-                  backgroundColor: '#48bb78',
-                  borderRadius: '4px 4px 0 0',
-                  minHeight: '10px'
-                }}></div>
-                <div style={{
-                  width: '20px',
-                  height: `${(data.rides / 1500) * 200}px`,
-                  backgroundColor: '#ed8936',
-                  borderRadius: '4px 4px 0 0',
-                  minHeight: '10px'
-                }}></div>
-              </div>
-              <p style={{ margin: '10px 0 0 0', fontSize: '12px', fontWeight: '600' }}>
-                {data.month}
-              </p>
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', marginTop: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '12px', height: '12px', backgroundColor: '#667eea', borderRadius: '2px' }}></div>
-            <span style={{ fontSize: '14px' }}>Users</span>
+        <h3 style={{ marginBottom: '25px', color: '#2d3748' }}>📈 Daily Trends (Last 30 Days)</h3>
+        {analytics.summary.dailyData && analytics.summary.dailyData.length > 0 ? (
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'end', 
+            gap: '8px', 
+            height: '300px',
+            padding: '20px 0',
+            overflowX: 'auto'
+          }}>
+            {analytics.summary.dailyData.slice(-15).map((data, index) => {
+              const maxRides = Math.max(...analytics.summary.dailyData.map(d => d.rides));
+              const height = maxRides > 0 ? (data.rides / maxRides) * 250 : 10;
+              return (
+                <div key={index} style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'center',
+                  minWidth: '40px'
+                }}>
+                  <div 
+                    title={`${new Date(data.date).toLocaleDateString()}: ${data.rides} rides, ₹${data.revenue}`}
+                    style={{
+                      width: '30px',
+                      height: `${height}px`,
+                      backgroundColor: '#667eea',
+                      borderRadius: '4px 4px 0 0',
+                      minHeight: '10px',
+                      cursor: 'pointer'
+                    }}
+                  ></div>
+                  <p style={{ margin: '10px 0 0 0', fontSize: '10px', fontWeight: '600', transform: 'rotate(-45deg)' }}>
+                    {new Date(data.date).getDate()}
+                  </p>
+                </div>
+              );
+            })}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '12px', height: '12px', backgroundColor: '#48bb78', borderRadius: '2px' }}></div>
-            <span style={{ fontSize: '14px' }}>Drivers</span>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '50px', color: '#718096' }}>
+            <p>No daily data available. Generate analytics to see trends.</p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '12px', height: '12px', backgroundColor: '#ed8936', borderRadius: '2px' }}></div>
-            <span style={{ fontSize: '14px' }}>Rides</span>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Recent Activity */}
+      {/* Analytics Info */}
       <div style={{
         backgroundColor: 'white',
         padding: '30px',
         borderRadius: '15px',
         boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
       }}>
-        <h3 style={{ marginBottom: '20px', color: '#2d3748' }}>🔔 Recent Activity</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-          {analytics.recentActivity.map((activity, index) => (
-            <div key={index} style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '15px',
-              padding: '15px',
-              backgroundColor: '#f7fafc',
-              borderRadius: '10px',
-              border: '1px solid #e2e8f0'
-            }}>
-              <div style={{
-                width: '40px',
-                height: '40px',
-                backgroundColor: activity.type === 'user_signup' ? '#667eea' : 
-                                activity.type === 'driver_signup' ? '#48bb78' : '#ed8936',
-                borderRadius: '10px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '18px'
-              }}>
-                {activity.type === 'user_signup' ? '👤' : 
-                 activity.type === 'driver_signup' ? '🚕' : '✅'}
-              </div>
-              <div style={{ flex: 1 }}>
-                <p style={{ margin: 0, fontWeight: '600', color: '#2d3748' }}>
-                  {activity.count} {activity.type.replace('_', ' ')}
-                </p>
-                <p style={{ margin: 0, fontSize: '14px', color: '#718096' }}>
-                  {activity.time}
-                </p>
-              </div>
-            </div>
-          ))}
+        <h3 style={{ marginBottom: '20px', color: '#2d3748' }}>📊 Analytics Information</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+          <div style={{ padding: '20px', backgroundColor: '#f7fafc', borderRadius: '10px' }}>
+            <h4 style={{ margin: '0 0 10px 0', color: '#2d3748' }}>Data Collection</h4>
+            <p style={{ margin: 0, fontSize: '14px', color: '#718096' }}>
+              Analytics are automatically generated daily and stored in the database. 
+              Click "Generate Analytics" to update with latest data.
+            </p>
+          </div>
+          <div style={{ padding: '20px', backgroundColor: '#f7fafc', borderRadius: '10px' }}>
+            <h4 style={{ margin: '0 0 10px 0', color: '#2d3748' }}>Real-time Metrics</h4>
+            <p style={{ margin: 0, fontSize: '14px', color: '#718096' }}>
+              Today's stats show live data including active drivers, total users, 
+              rides completed today, and revenue generated.
+            </p>
+          </div>
         </div>
       </div>
     </div>

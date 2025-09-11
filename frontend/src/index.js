@@ -4,7 +4,7 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 
-import './index.css'; // optional global styles
+import './styles/globals.css'; // design system styles
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

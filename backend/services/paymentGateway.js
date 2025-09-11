@@ -1,6 +1,7 @@
 const Razorpay = require('razorpay');
 const stripe = require('stripe');
 const crypto = require('crypto');
+const PayPalService = require('./paypalService');
 
 class PaymentGateway {
     constructor() {
@@ -12,6 +13,9 @@ class PaymentGateway {
 
         // Initialize Stripe
         this.stripe = stripe(process.env.STRIPE_SECRET_KEY);
+        
+        // Initialize PayPal
+        this.paypal = new PayPalService();
     }
 
     // Razorpay Integration
@@ -103,20 +107,10 @@ class PaymentGateway {
         }
     }
 
-    // PayPal Integration (Basic)
+    // PayPal Integration
     async createPayPalOrder(amount, currency = 'USD') {
         try {
-            // This would integrate with PayPal SDK
-            // For demo purposes, returning mock response
-            const orderId = `PAYPAL_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            
-            return {
-                success: true,
-                order_id: orderId,
-                approval_url: `https://sandbox.paypal.com/checkoutnow?token=${orderId}`,
-                amount,
-                currency
-            };
+            return await this.paypal.createOrder(amount, currency);
         } catch (error) {
             return {
                 success: false,
@@ -127,12 +121,7 @@ class PaymentGateway {
 
     async verifyPayPalPayment(orderId, payerId) {
         try {
-            // Mock verification for demo
-            return {
-                success: true,
-                status: 'COMPLETED',
-                payer_id: payerId
-            };
+            return await this.paypal.captureOrder(orderId);
         } catch (error) {
             return {
                 success: false,
@@ -206,14 +195,15 @@ class PaymentGateway {
         }
     }
 
-    async paypalRefund(orderId, amount, reason) {
-        // Mock PayPal refund for demo
-        return {
-            success: true,
-            refund_id: `REFUND_${Date.now()}`,
-            amount,
-            status: 'completed'
-        };
+    async paypalRefund(captureId, amount, reason) {
+        try {
+            return await this.paypal.refundCapture(captureId, amount, 'USD');
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message
+            };
+        }
     }
 }
 

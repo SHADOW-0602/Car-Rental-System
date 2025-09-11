@@ -8,51 +8,134 @@ export default function DriverRides() {
   const [activeTab, setActiveTab] = useState('available');
 
   useEffect(() => {
-    // Mock data - replace with actual API call
-    setRides([
-      {
-        id: 1,
-        passenger: 'John Doe',
-        from: 'Airport Terminal 1',
-        to: 'Downtown Plaza',
-        distance: '12.5 km',
-        fare: 450,
-        status: 'available',
-        requestTime: '2 mins ago'
-      },
-      {
-        id: 2,
-        passenger: 'Sarah Wilson',
-        from: 'Shopping Mall',
-        to: 'Residential Area',
-        distance: '8.2 km',
-        fare: 280,
-        status: 'in_progress',
-        requestTime: '15 mins ago'
-      },
-      {
-        id: 3,
-        passenger: 'Mike Johnson',
-        from: 'Hotel Grand',
-        to: 'Railway Station',
-        distance: '6.8 km',
-        fare: 320,
-        status: 'completed',
-        requestTime: '1 hour ago'
+    const fetchRides = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        
+        // Fetch driver's rides and ride requests
+        const [ridesRes, requestsRes] = await Promise.all([
+          fetch('/api/rides/driver', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }),
+          fetch('/api/rides/requests', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+        ]);
+        
+        const ridesData = await ridesRes.json();
+        const requestsData = await requestsRes.json();
+        
+        const allRides = [];
+        
+        // Add driver's accepted/in-progress/completed rides
+        if (ridesData.success) {
+          ridesData.rides.forEach(ride => {
+            allRides.push({
+              id: ride._id,
+              passenger: ride.user_id?.name || 'Unknown',
+              from: ride.pickup_location?.address || 'Unknown location',
+              to: ride.drop_location?.address || 'Unknown location',
+              distance: `${ride.distance?.toFixed(1) || 0} km`,
+              fare: ride.fare || 0,
+              status: ride.status,
+              requestTime: new Date(ride.createdAt).toLocaleString()
+            });
+          });
+        }
+        
+        // Add available ride requests
+        if (requestsData.success) {
+          requestsData.requests.forEach(request => {
+            allRides.push({
+              id: request._id,
+              passenger: request.user_id?.name || 'Unknown',
+              from: request.pickup_location?.address || 'Unknown location',
+              to: request.drop_location?.address || 'Unknown location',
+              distance: `${request.distance?.toFixed(1) || 0} km`,
+              fare: request.fare || 0,
+              status: 'available',
+              requestTime: new Date(request.createdAt).toLocaleString()
+            });
+          });
+        }
+        
+        setRides(allRides);
+      } catch (error) {
+        console.error('Error fetching rides:', error);
       }
-    ]);
-  }, []);
+    };
+    
+    if (user?.role === 'driver') {
+      fetchRides();
+      // Refresh every 30 seconds for real-time updates
+      const interval = setInterval(fetchRides, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
 
-  const handleAcceptRide = (rideId) => {
-    setRides(rides.map(ride => 
-      ride.id === rideId ? { ...ride, status: 'accepted' } : ride
-    ));
+  const handleAcceptRide = async (rideId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/rides/${rideId}/accept`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        setRides(rides.map(ride => 
+          ride.id === rideId ? { ...ride, status: 'accepted' } : ride
+        ));
+      }
+    } catch (error) {
+      console.error('Error accepting ride:', error);
+    }
   };
 
-  const handleCompleteRide = (rideId) => {
-    setRides(rides.map(ride => 
-      ride.id === rideId ? { ...ride, status: 'completed' } : ride
-    ));
+  const handleStartTrip = async (rideId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/rides/${rideId}/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ driverLocation: { latitude: 0, longitude: 0 } })
+      });
+      
+      if (response.ok) {
+        setRides(rides.map(ride => 
+          ride.id === rideId ? { ...ride, status: 'in_progress' } : ride
+        ));
+      }
+    } catch (error) {
+      console.error('Error starting trip:', error);
+    }
+  };
+
+  const handleCompleteRide = async (rideId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/rides/${rideId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: 'completed' })
+      });
+      
+      if (response.ok) {
+        setRides(rides.map(ride => 
+          ride.id === rideId ? { ...ride, status: 'completed' } : ride
+        ));
+      }
+    } catch (error) {
+      console.error('Error completing ride:', error);
+    }
   };
 
   const filteredRides = rides.filter(ride => {
@@ -208,6 +291,7 @@ export default function DriverRides() {
 
                   {ride.status === 'accepted' && (
                     <button
+                      onClick={() => handleStartTrip(ride.id)}
                       style={{
                         padding: '10px 20px',
                         backgroundColor: '#ed8936',

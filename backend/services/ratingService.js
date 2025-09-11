@@ -195,6 +195,43 @@ class RatingService {
             created_at: r.createdAt
         }));
     }
+
+    // Get driver dashboard statistics
+    async getDriverDashboardStats(driverId) {
+        try {
+            // Get driver info
+            const driver = await Driver.findById(driverId);
+            if (!driver) {
+                throw new Error('Driver not found');
+            }
+
+            // Get rating summary
+            const ratingSummary = await this.getRatingSummary(driverId, 'driver');
+
+            // Calculate this month's earnings
+            const startOfMonth = new Date();
+            startOfMonth.setDate(1);
+            startOfMonth.setHours(0, 0, 0, 0);
+
+            const thisMonthRides = await Ride.find({
+                driver_id: driverId,
+                status: 'completed',
+                'timestamps.completed_at': { $gte: startOfMonth }
+            });
+
+            const thisMonthEarnings = thisMonthRides.reduce((sum, ride) => sum + (ride.fare || 0), 0);
+
+            return {
+                rating: ratingSummary.average_rating || 0,
+                totalRatings: ratingSummary.total_ratings || 0,
+                completedRides: driver.completedRides || 0,
+                totalEarnings: driver.earnings?.total || 0,
+                thisMonthEarnings: thisMonthEarnings
+            };
+        } catch (error) {
+            throw new Error(`Failed to get driver stats: ${error.message}`);
+        }
+    }
 }
 
 module.exports = RatingService;
