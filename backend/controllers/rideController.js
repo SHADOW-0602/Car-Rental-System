@@ -1,18 +1,31 @@
 const path = require('path');
 const Ride = require('../models/Ride');
 const Driver = require('../models/Driver');
+const User = require('../models/User');
 const { calculateDistance } = require('../utils/haversine');
 const { parseLocationFile, findNearbyDrivers, findDriversInZone, getDistanceMatrix } = require('../services/locationService');
 const InvoiceService = require('../services/invoiceService');
 const RatingService = require('../services/ratingService');
-const rideTrackingService = require('../services/rideTrackingService');
+// Note: TrackingService is now handled via socket.io in trackingSocket.js
+const { generateOTPWithExpiry, verifyOTP, isOTPExpired } = require('../utils/otpGenerator');
 
 const invoiceService = new InvoiceService();
 const ratingService = new RatingService();
 
+// Helper function to get driver's current location
+async function getDriverCurrentLocation(driverId) {
+    try {
+        const driversData = parseLocationFile();
+        return driversData.find(d => d._id === driverId);
+    } catch (error) {
+        console.error('Error getting driver location:', error);
+        return null;
+    }
+}
+
 exports.requestRide = async (req, res) => {
     try {
-        const { pickup_location, drop_location, vehicle_type, payment_method, preferred_driver_id } = req.body;
+        const { pickup_location, drop_location, vehicle_type, payment_method, preferred_driver_id, surge_multiplier } = req.body;
         
         // Check for existing active ride
         const existingRide = await Ride.findOne({
@@ -44,25 +57,37 @@ exports.requestRide = async (req, res) => {
             });
         }
         
-        // Calculate distance and fare
+        // Calculate distance and fare with surge pricing
         const distance = calculateDistance(
             pickup_location.latitude, pickup_location.longitude,
             drop_location.latitude, drop_location.longitude
         );
-        const baseFare = 50;
-        const perKmRate = vehicle_type === 'suv' ? 20 : vehicle_type === 'sedan' ? 15 : 12;
-        const fare = Math.round(baseFare + (distance * perKmRate));
         
-        // Find nearby available drivers
-        const nearbyDrivers = await findNearbyDrivers(pickup_location, vehicle_type);
+        // Vehicle type rates
+        const vehicleRates = {
+            economy: { baseFare: 50, perKm: 15, perMin: 2 },
+            sedan: { baseFare: 70, perKm: 20, perMin: 2.5 },
+            suv: { baseFare: 90, perKm: 25, perMin: 3 }
+        };
         
-        if (nearbyDrivers.length === 0) {
-            return res.status(404).json({ 
-                success: false,
-                message: 'No drivers available nearby',
-                availableDrivers: 0
-            });
-        }
+        const rates = vehicleRates[vehicle_type] || vehicleRates.economy;
+        const estimatedTime = Math.round(distance * 2);
+        
+        // Calculate base fare
+        const baseFare = rates.baseFare;
+        const distanceFare = distance * rates.perKm;
+        const timeFare = estimatedTime * rates.perMin;
+        const baseEstimatedFare = Math.round(baseFare + distanceFare + timeFare);
+        
+        // Apply surge pricing
+        const surgeMultiplierValue = surge_multiplier || await calculateSurgePricing(pickup_location, vehicle_type);
+        const fare = Math.round(baseEstimatedFare * surgeMultiplierValue);
+        
+        // Find nearby available drivers with enhanced matching
+        const nearbyDrivers = await findNearbyDriversWithMatching(pickup_location, vehicle_type, req.user.id);
+        
+        // Create ride request even if no drivers are immediately available
+        // This allows for real-time driver matching as drivers come online
 
         // Create ride request
         const rideData = {
@@ -71,9 +96,18 @@ exports.requestRide = async (req, res) => {
             drop_location,
             distance,
             fare,
+            baseFare,
+            surgeMultiplier: surgeMultiplierValue,
             vehicle_type: vehicle_type || 'economy',
             payment_method,
-            status: 'requested'
+            status: 'requested',
+            estimatedTime,
+            fareBreakdown: {
+                baseFare,
+                distanceFare: Math.round(distanceFare),
+                timeFare: Math.round(timeFare),
+                surgeAmount: Math.round((fare - baseEstimatedFare))
+            }
         };
         
         // If preferred driver is specified, add to ride data
@@ -86,6 +120,18 @@ exports.requestRide = async (req, res) => {
         // Send notifications to drivers
         const io = req.app.get('io');
         if (io) {
+            // Notify admin about new ride request
+            io.emit('admin_notification', {
+                type: 'new_ride_request',
+                rideId: ride._id,
+                message: `New ride request from ${req.user.name}`,
+                user: req.user.name,
+                pickup: pickup_location.address,
+                destination: drop_location.address,
+                fare: fare,
+                timestamp: new Date()
+            });
+            
             if (preferred_driver_id) {
                 // Send to specific preferred driver
                 io.emit(`driver_notification_${preferred_driver_id}`, {
@@ -101,21 +147,23 @@ exports.requestRide = async (req, res) => {
                     isPreferred: true,
                     timestamp: new Date()
                 });
-            } else {
-                // Send to all nearby drivers
+            } else if (nearbyDrivers.length > 0) {
+                // Send to nearby drivers only (within 10km radius)
                 nearbyDrivers.forEach(driver => {
-                    io.emit(`driver_notification_${driver._id}`, {
-                        type: 'ride_request',
-                        rideId: ride._id,
-                        message: `New ride request from ${req.user.name}`,
-                        pickup: pickup_location.address || `${pickup_location.latitude}, ${pickup_location.longitude}`,
-                        destination: drop_location.address || `${drop_location.latitude}, ${drop_location.longitude}`,
-                        fare: fare,
-                        distance: Math.round(distance * 100) / 100,
-                        vehicle_type,
-                        payment_method,
-                        timestamp: new Date()
-                    });
+                    if (driver.distance <= 10) { // Only notify drivers within 10km
+                        io.emit(`driver_notification_${driver._id}`, {
+                            type: 'ride_request',
+                            rideId: ride._id,
+                            message: `New ride request from ${req.user.name}`,
+                            pickup: pickup_location.address || `${pickup_location.latitude}, ${pickup_location.longitude}`,
+                            destination: drop_location.address || `${drop_location.latitude}, ${drop_location.longitude}`,
+                            fare: fare,
+                            distance: Math.round(distance * 100) / 100,
+                            vehicle_type,
+                            payment_method,
+                            timestamp: new Date()
+                        });
+                    }
                 });
             }
         }
@@ -126,8 +174,11 @@ exports.requestRide = async (req, res) => {
             ride,
             estimatedFare: fare,
             estimatedDistance: distance,
-            message: 'Ride request sent to nearby drivers. Please wait for a driver to accept.',
-            waitingForAccept: true
+            message: nearbyDrivers.length > 0 ? 
+                'Ride request sent to nearby drivers. Please wait for a driver to accept.' :
+                'Ride request created. Searching for available drivers in your area...',
+            waitingForAccept: true,
+            availableDrivers: nearbyDrivers.length
         });
     } catch (err) {
         res.status(400).json({ success: false, error: err.message });
@@ -169,8 +220,7 @@ exports.updateRideStatus = async (req, res) => {
         
         if (status === 'completed') {
             updateData['timestamps.completed_at'] = new Date();
-            // Stop ride simulation
-            rideTrackingService.stopRideSimulation(req.params.id);
+            // Tracking is now handled via socket.io
         }
         
         if (status === 'in_progress' && !updateData['timestamps.started_at']) {
@@ -259,10 +309,7 @@ exports.cancelRide = async (req, res) => {
         ride.timestamps.cancelled_at = new Date();
         await ride.save();
         
-        // Stop ride simulation if in progress
-        if (ride.status === 'in_progress') {
-            rideTrackingService.stopRideSimulation(req.params.id);
-        }
+        // Tracking is now handled via socket.io
         
         // Clear location update interval
         if (global.locationIntervals && global.locationIntervals[req.params.id]) {
@@ -379,13 +426,7 @@ exports.startTrip = async (req, res) => {
         ride.timestamps.started_at = new Date();
         await ride.save();
         
-        // Start ride simulation (only for driver tracking)
-        rideTrackingService.startRideSimulation(
-            rideId,
-            ride.pickup_location,
-            ride.drop_location,
-            req.user.id
-        );
+        // Tracking is now handled via socket.io
         
         // Notify user that trip has started
         const io = req.app.get('io');
@@ -421,34 +462,38 @@ exports.getTripStatus = async (req, res) => {
             return res.status(404).json({ success: false, error: 'Ride not found' });
         }
         
-        // Check authorization - user can access their own rides, driver can access assigned rides
+        // Check authorization - admin can access all rides, users can access their own, drivers can access assigned rides
         const isAuthorized = 
-            (req.user.role === 'user' && ride.user_id._id.toString() === req.user.id) ||
-            (req.user.role === 'driver' && ride.driver_id && ride.driver_id._id.toString() === req.user.id) ||
-            req.user.role === 'admin';
+            req.user.role === 'admin' ||
+            (req.user.role === 'user' && ride.user_id && ride.user_id._id.toString() === req.user.id) ||
+            (req.user.role === 'driver' && ride.driver_id && ride.driver_id._id.toString() === req.user.id);
             
         if (!isAuthorized) {
+            console.log('Authorization failed:', {
+                userRole: req.user.role,
+                userId: req.user.id,
+                rideUserId: ride.user_id?._id?.toString(),
+                rideDriverId: ride.driver_id?._id?.toString()
+            });
             return res.status(403).json({ success: false, error: 'Unauthorized access to this ride' });
         }
         
         // Provide driver location data for tracking
         let driverLocation = null;
+        let trackingData = null;
         if (ride.status === 'in_progress' && ride.driver_id) {
-            try {
-                const locationData = rideTrackingService.getRideStatus(rideId);
-                if (locationData && req.user.role === 'driver') {
-                    trackingData = locationData;
-                }
-                // For users, provide basic location info without detailed tracking
-                if (locationData && req.user.role === 'user') {
+            // Tracking data is now provided via socket.io real-time updates
+            // Check if ride has tracking data in database
+            if (ride.tracking) {
+                if (req.user.role === 'driver') {
+                    trackingData = ride.tracking;
+                } else if (req.user.role === 'user') {
                     driverLocation = {
-                        address: locationData.currentLocation?.address || 'En route',
-                        progress: locationData.progress || 0,
-                        eta: locationData.eta || 'Calculating...'
+                        address: ride.tracking.currentLocation?.address || 'En route',
+                        progress: ride.tracking.progress || 0,
+                        eta: ride.tracking.eta || 'Calculating...'
                     };
                 }
-            } catch (trackingError) {
-                console.log('Tracking data not available:', trackingError.message);
             }
         }
         
@@ -477,42 +522,152 @@ exports.getTripStatus = async (req, res) => {
 
 exports.getRideRequests = async (req, res) => {
     try {
+        console.log('Getting ride requests for driver:', req.user.id);
+        
         const requests = await Ride.find({ 
             status: 'requested',
-            driver_id: { $exists: false }
+            $or: [
+                { driver_id: { $exists: false } },
+                { driver_id: null }
+            ],
+            declined_by: { $ne: req.user.id }
         })
         .populate('user_id', 'name phone rating')
         .sort({ createdAt: -1 })
         .limit(20);
         
+        console.log('Found ride requests:', requests.length);
+        requests.forEach(req => {
+            console.log('Request ID:', req._id, 'Status:', req.status);
+        });
+        
         res.json({ success: true, requests });
     } catch (err) {
+        console.error('Get ride requests error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 };
 
 exports.acceptRideRequest = async (req, res) => {
     try {
+        console.log('=== ACCEPT RIDE REQUEST ENDPOINT HIT ===');
+        console.log('Method:', req.method);
+        console.log('URL:', req.url);
+        console.log('Params:', req.params);
+        console.log('User:', { id: req.user.id, role: req.user.role });
+        
         const rideId = req.params.id;
         const driverId = req.user.id;
         
+        console.log('Accepting ride:', rideId, 'by driver:', driverId);
+        
+        // Validate ObjectId format
+        if (!rideId || !rideId.match(/^[0-9a-fA-F]{24}$/)) {
+            console.log('Invalid ride ID format:', rideId);
+            return res.status(400).json({ success: false, error: 'Invalid ride ID format' });
+        }
+        
+        // Validate driver ID format
+        if (!driverId || !driverId.match(/^[0-9a-fA-F]{24}$/)) {
+            console.log('Invalid driver ID format:', driverId);
+            return res.status(400).json({ success: false, error: 'Invalid driver ID format' });
+        }
+        
         const ride = await Ride.findById(rideId);
         if (!ride) {
+            console.log('Ride not found:', rideId);
             return res.status(404).json({ success: false, error: 'Ride not found' });
         }
         
+        console.log('Found ride with status:', ride.status);
+        
         if (ride.status !== 'requested') {
-            return res.status(400).json({ success: false, error: 'Ride already accepted or cancelled' });
+            console.log('Ride status check failed:', {
+                rideId,
+                currentStatus: ride.status,
+                expectedStatus: 'requested',
+                driverId,
+                declinedBy: ride.declined_by
+            });
+            return res.status(400).json({ 
+                success: false, 
+                error: `Ride status is '${ride.status}', expected 'requested'` 
+            });
         }
+        
+        // Check if driver has already declined this ride
+        if (ride.declined_by && ride.declined_by.includes(driverId)) {
+            console.log('Driver has already declined this ride:', { rideId, driverId });
+            return res.status(400).json({ 
+                success: false, 
+                error: 'You have already declined this ride request' 
+            });
+        }
+        
+        // Generate OTP for ride verification
+        const otpData = generateOTPWithExpiry(10); // 10 minutes expiry
+        
+        // Get driver information from Driver model
+        const driver = await Driver.findById(driverId).select('name phone rating');
+        if (!driver) {
+            console.log('Driver not found in Driver model:', driverId);
+            return res.status(404).json({ success: false, error: 'Driver not found' });
+        }
+        
+        console.log('Found driver:', driver.name);
+        
+        // Calculate distance from driver to user
+        const driverLocation = await getDriverCurrentLocation(driverId);
+        const distanceFromUser = driverLocation ? 
+            calculateDistance(
+                driverLocation.latitude, driverLocation.longitude,
+                ride.pickup_location.latitude, ride.pickup_location.longitude
+            ) : 2; // Default 2km if location not available
+        
+        // Calculate ETA (assuming average speed of 30 km/h)
+        const eta = Math.ceil((distanceFromUser / 30) * 60); // in minutes
+        
+        console.log('Distance from user:', distanceFromUser, 'ETA:', eta);
         
         ride.driver_id = driverId;
         ride.status = 'accepted';
         ride.timestamps.accepted_at = new Date();
+        ride.ride_phases.driver_accepted = new Date();
+        ride.otp = otpData;
+        ride.driver_info = {
+            name: driver.name,
+            phone: driver.phone,
+            vehicle_number: driver.driverInfo?.vehicleNumber || 'MH-12-AB-1234',
+            vehicle_model: driver.driverInfo?.vehicleModel || 'Sedan',
+            rating: driver.rating || 4.5,
+            distance_from_user: Math.round(distanceFromUser * 100) / 100,
+            eta: eta,
+            photo: driver.profilePhoto || null
+        };
+        
+        // Initialize tracking
+        ride.tracking = {
+            isActive: true,
+            currentLocation: driverLocation ? {
+                latitude: driverLocation.latitude,
+                longitude: driverLocation.longitude,
+                address: driverLocation.address || 'Driver location',
+                timestamp: new Date()
+            } : null,
+            eta: eta,
+            progress: 0,
+            lastUpdate: new Date()
+        };
+        
+        console.log('Saving ride with driver_id:', driverId);
         await ride.save();
+        console.log('Ride saved successfully');
         
         const populatedRide = await Ride.findById(rideId)
             .populate('user_id', 'name phone')
             .populate('driver_id', 'name phone rating');
+        
+        console.log('Populated ride:', populatedRide);
         
         // Notify user that ride was accepted
         const io = req.app.get('io');
@@ -530,48 +685,35 @@ exports.acceptRideRequest = async (req, res) => {
                 timestamp: new Date()
             });
             
-            // Start sending driver location updates to user
-            const locationUpdateInterval = setInterval(async () => {
-                try {
-                    // Get current driver location from drivers.txt
-                    const driversData = parseLocationFile();
-                    const driverLocation = driversData.find(d => d._id === driverId);
-                    
-                    if (driverLocation && populatedRide.status !== 'completed' && populatedRide.status !== 'cancelled') {
-                        // Calculate ETA based on distance to pickup/destination
-                        const targetLocation = populatedRide.status === 'accepted' ? 
-                            populatedRide.pickup_location : populatedRide.drop_location;
-                        
-                        const distance = calculateDistance(
-                            driverLocation.latitude, driverLocation.longitude,
-                            targetLocation.latitude, targetLocation.longitude
-                        );
-                        
-                        const eta = Math.ceil(distance * 2); // 2 minutes per km
-                        
-                        // Emit location update to user
-                        io.emit(`ride_tracking_${rideId}`, {
-                            currentLocation: {
-                                latitude: driverLocation.latitude,
-                                longitude: driverLocation.longitude,
-                                address: driverLocation.address || `${driverLocation.latitude.toFixed(4)}, ${driverLocation.longitude.toFixed(4)}`
-                            },
-                            eta: eta,
-                            distance: distance.toFixed(2),
-                            status: populatedRide.status,
-                            timestamp: new Date()
-                        });
-                    } else {
-                        clearInterval(locationUpdateInterval);
-                    }
-                } catch (error) {
-                    console.error('Error sending location update:', error);
-                }
-            }, 5000); // Update every 5 seconds
+            // Notify all drivers that this ride is no longer available
+            io.emit('ride_no_longer_available', {
+                rideId: rideId,
+                message: 'Ride has been accepted by another driver',
+                acceptedBy: req.user.name,
+                timestamp: new Date()
+            });
             
-            // Store interval ID to clear it later
-            global.locationIntervals = global.locationIntervals || {};
-            global.locationIntervals[rideId] = locationUpdateInterval;
+            // Also send specific notifications to remove from driver interfaces
+            const allDrivers = await User.find({ role: 'driver' }).select('_id');
+            allDrivers.forEach(driver => {
+                if (driver._id.toString() !== driverId) {
+                    io.emit(`driver_notification_${driver._id}`, {
+                        type: 'remove_ride_request',
+                        rideId: rideId,
+                        message: 'Ride no longer available',
+                        timestamp: new Date()
+                    });
+                }
+            });
+            
+            // Start Uber-like tracking service
+            if (io.trackingService && driverLocation) {
+                io.trackingService.startDriverTracking(
+                    rideId,
+                    driverLocation,
+                    populatedRide.pickup_location
+                );
+            }
             
             // Notify admin about ride acceptance
             io.emit('admin_notification', {
@@ -584,8 +726,10 @@ exports.acceptRideRequest = async (req, res) => {
             });
         }
         
+        console.log('Sending success response with ride:', populatedRide._id);
         res.json({ success: true, ride: populatedRide });
     } catch (err) {
+        console.error('Accept ride error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 };
@@ -606,7 +750,143 @@ exports.getActiveTrips = async (req, res) => {
     }
 };
 
-// Complete ride (driver only)
+// Verify OTP and start ride (driver only)
+exports.verifyOTPAndStartRide = async (req, res) => {
+    try {
+        const { rideId } = req.params;
+        const { otp } = req.body;
+        const driverId = req.user.id;
+        
+        const ride = await Ride.findById(rideId);
+        if (!ride) {
+            return res.status(404).json({ success: false, error: 'Ride not found' });
+        }
+        
+        if (ride.driver_id.toString() !== driverId) {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        }
+        
+        if (ride.status !== 'accepted') {
+            return res.status(400).json({ success: false, error: 'Ride must be accepted to start' });
+        }
+        
+        // Verify OTP
+        if (!verifyOTP(otp, ride.otp.code, ride.otp.expires_at)) {
+            if (isOTPExpired(ride.otp.expires_at)) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'OTP has expired. Please request a new ride.' 
+                });
+            }
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Invalid OTP. Please check with the passenger.' 
+            });
+        }
+        
+        // Start the ride
+        ride.status = 'in_progress';
+        ride.timestamps.started_at = new Date();
+        await ride.save();
+        
+        // Tracking is now handled via socket.io
+        
+        // Notify user that ride has started
+        const io = req.app.get('io');
+        if (io) {
+            io.emit(`user_notification_${ride.user_id}`, {
+                type: 'ride_started',
+                rideId: rideId,
+                message: 'Your ride has started. Driver is on the way to your destination.',
+                timestamp: new Date()
+            });
+        }
+        
+        res.json({
+            success: true,
+            message: 'Ride started successfully',
+            ride
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Complete ride with payment verification (driver only)
+exports.completeRideWithPayment = async (req, res) => {
+    try {
+        const { rideId } = req.params;
+        const { paymentReceived } = req.body;
+        const driverId = req.user.id;
+        
+        const ride = await Ride.findById(rideId);
+        if (!ride) {
+            return res.status(404).json({ success: false, error: 'Ride not found' });
+        }
+        
+        if (ride.driver_id.toString() !== driverId) {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        }
+        
+        if (ride.status !== 'in_progress') {
+            return res.status(400).json({ success: false, error: 'Ride must be in progress to complete' });
+        }
+        
+        // Check if payment is received
+        if (!paymentReceived) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Payment must be received before ending the ride' 
+            });
+        }
+        
+        ride.status = 'completed';
+        ride.payment_status = 'paid';
+        ride.timestamps.completed_at = new Date();
+        await ride.save();
+        
+        // Tracking is now handled via socket.io
+        
+        // Clear location update interval
+        if (global.locationIntervals && global.locationIntervals[rideId]) {
+            clearInterval(global.locationIntervals[rideId]);
+            delete global.locationIntervals[rideId];
+        }
+        
+        // Auto-generate invoice
+        try {
+            await invoiceService.generateInvoice(rideId);
+        } catch (invoiceError) {
+            console.error('Invoice generation failed for ride:', rideId, 'Error:', invoiceError.message);
+        }
+        
+        const populatedRide = await Ride.findById(rideId)
+            .populate('user_id', 'name phone')
+            .populate('driver_id', 'name phone rating');
+        
+        // Notify user that ride is completed
+        const io = req.app.get('io');
+        if (io) {
+            io.emit(`user_notification_${ride.user_id}`, {
+                type: 'ride_completed',
+                rideId: rideId,
+                message: 'Your ride has been completed. Thank you for choosing our service!',
+                ride: populatedRide,
+                timestamp: new Date()
+            });
+        }
+        
+        res.json({
+            success: true,
+            message: 'Ride completed successfully',
+            ride: populatedRide
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Complete ride (driver only) - Legacy function for backward compatibility
 exports.completeRide = async (req, res) => {
     try {
         const rideId = req.params.id;
@@ -629,8 +909,7 @@ exports.completeRide = async (req, res) => {
         ride.timestamps.completed_at = new Date();
         await ride.save();
         
-        // Stop ride simulation and location updates
-        rideTrackingService.stopRideSimulation(rideId);
+        // Tracking is now handled via socket.io
         
         // Clear location update interval
         if (global.locationIntervals && global.locationIntervals[rideId]) {
@@ -665,6 +944,421 @@ exports.completeRide = async (req, res) => {
         
         res.json({ success: true, ride: populatedRide, message: 'Ride completed successfully' });
     } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Get user's rides
+exports.getUserRides = async (req, res) => {
+    try {
+        const rides = await Ride.find({ user_id: req.user.id })
+            .populate('driver_id', 'name phone rating')
+            .sort({ createdAt: -1 })
+            .limit(20);
+        
+        res.json({ success: true, rides });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Get driver's rides
+exports.getDriverRides = async (req, res) => {
+    try {
+        const rides = await Ride.find({ driver_id: req.user.id })
+            .populate('user_id', 'name phone rating')
+            .sort({ createdAt: -1 })
+            .limit(20);
+        
+        res.json({ success: true, rides });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Find nearby drivers with enhanced matching
+async function findNearbyDriversWithMatching(pickupLocation, vehicleType, userId) {
+    try {
+        // Get all available drivers
+        const availableDrivers = await Driver.find({
+            status: 'available',
+            'driverInfo.isVerified': true,
+            location: { $exists: true }
+        }).select('name phone rating location lastActive vehicleInfo');
+        
+        if (availableDrivers.length === 0) {
+            return [];
+        }
+        
+        // Calculate scores for each driver
+        const driversWithScores = availableDrivers.map(driver => {
+            const distance = calculateDistance(
+                pickupLocation.latitude,
+                pickupLocation.longitude,
+                driver.location.latitude,
+                driver.location.longitude
+            );
+            
+            // Calculate matching score based on multiple factors
+            let score = 0;
+            
+            // Distance score (closer is better)
+            const maxDistance = 10; // 10km max
+            const distanceScore = Math.max(0, (maxDistance - distance) / maxDistance) * 40;
+            score += distanceScore;
+            
+            // Rating score (higher rating is better)
+            const ratingScore = (driver.rating || 4.0) * 5; // Max 25 points
+            score += ratingScore;
+            
+            // Vehicle type match
+            if (driver.vehicleInfo && driver.vehicleInfo.type === vehicleType) {
+                score += 15;
+            }
+            
+            // Activity score (more recent activity is better)
+            const lastActiveMinutes = (new Date() - new Date(driver.lastActive)) / (1000 * 60);
+            const activityScore = Math.max(0, (30 - lastActiveMinutes) / 30) * 10; // Max 10 points
+            score += activityScore;
+            
+            // Response time score (based on historical data)
+            const responseTimeScore = 10; // Default score
+            score += responseTimeScore;
+            
+            return {
+                ...driver.toObject(),
+                distance,
+                score,
+                eta: Math.round(distance * 2) // Rough ETA calculation
+            };
+        });
+        
+        // Sort by score (highest first) and distance (closest first)
+        driversWithScores.sort((a, b) => {
+            if (Math.abs(a.score - b.score) < 5) {
+                return a.distance - b.distance; // If scores are close, prefer closer driver
+            }
+            return b.score - a.score;
+        });
+        
+        // Return top 5 drivers
+        return driversWithScores.slice(0, 5);
+    } catch (error) {
+        console.error('Error in enhanced driver matching:', error);
+        return [];
+    }
+}
+
+// Find nearby drivers
+exports.findNearbyDrivers = async (req, res) => {
+    try {
+        const { latitude, longitude, vehicle_type } = req.query;
+        
+        if (!latitude || !longitude) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Latitude and longitude are required' 
+            });
+        }
+        
+        const drivers = await findNearbyDriversWithMatching(
+            { latitude: parseFloat(latitude), longitude: parseFloat(longitude) },
+            vehicle_type,
+            req.user.id
+        );
+        
+        res.json({ success: true, drivers });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Find drivers in zone
+exports.findDriversInZone = async (req, res) => {
+    try {
+        const { zone } = req.query;
+        
+        if (!zone) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Zone is required' 
+            });
+        }
+        
+        const drivers = await findDriversInZone(zone);
+        
+        res.json({ success: true, drivers });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Calculate fare with surge pricing
+exports.calculateFare = async (req, res) => {
+    try {
+        const { pickup_location, drop_location, vehicle_type, include_surge } = req.body;
+        
+        if (!pickup_location || !drop_location) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Pickup and drop locations are required' 
+            });
+        }
+        
+        const distance = calculateDistance(
+            pickup_location.latitude, 
+            pickup_location.longitude,
+            drop_location.latitude, 
+            drop_location.longitude
+        );
+        
+        // Vehicle type rates
+        const vehicleRates = {
+            economy: { baseFare: 50, perKm: 15, perMin: 2 },
+            sedan: { baseFare: 70, perKm: 20, perMin: 2.5 },
+            suv: { baseFare: 90, perKm: 25, perMin: 3 }
+        };
+        
+        const rates = vehicleRates[vehicle_type] || vehicleRates.economy;
+        
+        // Calculate base fare
+        const baseFare = rates.baseFare;
+        const distanceFare = distance * rates.perKm;
+        const estimatedTime = Math.round(distance * 2); // Rough estimate
+        const timeFare = estimatedTime * rates.perMin;
+        
+        let baseEstimatedFare = Math.round(baseFare + distanceFare + timeFare);
+        
+        // Calculate surge pricing based on demand and time
+        let surgeMultiplier = 1.0;
+        if (include_surge) {
+            surgeMultiplier = await calculateSurgePricing(pickup_location, vehicle_type);
+        }
+        
+        const finalFare = Math.round(baseEstimatedFare * surgeMultiplier);
+        
+        res.json({
+            success: true,
+            distance: distance.toFixed(2),
+            baseFare,
+            estimatedFare: finalFare,
+            estimatedTime,
+            vehicle_type,
+            surgeMultiplier: surgeMultiplier.toFixed(2),
+            fareBreakdown: {
+                baseFare,
+                distanceFare: Math.round(distanceFare),
+                timeFare: Math.round(timeFare),
+                surgeAmount: Math.round((finalFare - baseEstimatedFare))
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Calculate surge pricing based on demand and time
+async function calculateSurgePricing(pickupLocation, vehicleType) {
+    try {
+        const now = new Date();
+        const hour = now.getHours();
+        
+        // Base surge factors
+        let surgeMultiplier = 1.0;
+        
+        // Time-based surge (rush hours)
+        if ((hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19)) {
+            surgeMultiplier += 0.5; // 50% increase during rush hours
+        }
+        
+        // Weekend surge
+        if (now.getDay() === 0 || now.getDay() === 6) {
+            surgeMultiplier += 0.3; // 30% increase on weekends
+        }
+        
+        // Check demand in the area (simplified - in real app, this would be based on actual demand data)
+        const nearbyRides = await Ride.countDocuments({
+            status: { $in: ['requested', 'accepted', 'in_progress'] },
+            createdAt: { $gte: new Date(Date.now() - 30 * 60 * 1000) }, // Last 30 minutes
+            'pickup_location.latitude': {
+                $gte: pickupLocation.latitude - 0.01,
+                $lte: pickupLocation.latitude + 0.01
+            },
+            'pickup_location.longitude': {
+                $gte: pickupLocation.longitude - 0.01,
+                $lte: pickupLocation.longitude + 0.01
+            }
+        });
+        
+        // Demand-based surge
+        if (nearbyRides > 10) {
+            surgeMultiplier += 0.4; // 40% increase for high demand
+        } else if (nearbyRides > 5) {
+            surgeMultiplier += 0.2; // 20% increase for medium demand
+        }
+        
+        // Vehicle type surge
+        if (vehicleType === 'suv') {
+            surgeMultiplier += 0.2; // 20% increase for SUVs
+        }
+        
+        // Cap surge at 3x
+        return Math.min(surgeMultiplier, 3.0);
+    } catch (error) {
+        console.error('Error calculating surge pricing:', error);
+        return 1.0; // Default to no surge if calculation fails
+    }
+}
+
+// Get distance matrix
+exports.getDistanceMatrix = async (req, res) => {
+    try {
+        const { origins, destinations } = req.body;
+        
+        if (!origins || !destinations) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Origins and destinations are required' 
+            });
+        }
+        
+        const matrix = await getDistanceMatrix(origins, destinations);
+        
+        res.json({ success: true, matrix });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Cancel ride
+exports.cancelRide = async (req, res) => {
+    try {
+        const rideId = req.params.id;
+        const userId = req.user.id;
+        
+        const ride = await Ride.findById(rideId);
+        if (!ride) {
+            return res.status(404).json({ success: false, error: 'Ride not found' });
+        }
+        
+        // Check authorization
+        if (ride.user_id.toString() !== userId && req.user.role !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        }
+        
+        // Only allow cancellation if ride is not completed
+        if (ride.status === 'completed') {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Cannot cancel completed ride' 
+            });
+        }
+        
+        ride.status = 'cancelled';
+        ride.timestamps.cancelled_at = new Date();
+        await ride.save();
+        
+        // Notify driver if ride was accepted
+        if (ride.driver_id) {
+            const io = req.app.get('io');
+            if (io) {
+                io.emit(`driver_notification_${ride.driver_id}`, {
+                    type: 'ride_cancelled',
+                    rideId: rideId,
+                    message: 'Ride has been cancelled by the passenger',
+                    timestamp: new Date()
+                });
+            }
+        }
+        
+        res.json({ success: true, message: 'Ride cancelled successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Update ride status
+exports.updateRideStatus = async (req, res) => {
+    try {
+        const rideId = req.params.id;
+        const { status } = req.body;
+        const userId = req.user.id;
+        
+        const ride = await Ride.findById(rideId);
+        if (!ride) {
+            return res.status(404).json({ success: false, error: 'Ride not found' });
+        }
+        
+        // Check authorization
+        if (ride.driver_id && ride.driver_id.toString() !== userId && req.user.role !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        }
+        
+        ride.status = status;
+        if (status === 'in_progress') {
+            ride.timestamps.started_at = new Date();
+        } else if (status === 'completed') {
+            ride.timestamps.completed_at = new Date();
+        }
+        
+        await ride.save();
+        
+        res.json({ success: true, message: 'Ride status updated successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Decline a ride request
+exports.declineRideRequest = async (req, res) => {
+    try {
+        const rideId = req.params.id;
+        const driverId = req.user.id;
+        
+        // Add driver to declined list to prevent showing the same request again
+        await Ride.findByIdAndUpdate(rideId, {
+            $addToSet: { declined_by: driverId }
+        });
+        
+        res.json({ 
+            success: true, 
+            message: 'Ride request declined' 
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Test endpoint to check if ride exists
+exports.testRideExists = async (req, res) => {
+    try {
+        const rideId = req.params.id;
+        console.log('Testing ride existence for ID:', rideId);
+        
+        const ride = await Ride.findById(rideId);
+        console.log('Found ride:', ride ? 'YES' : 'NO');
+        
+        if (ride) {
+            console.log('Ride details:', {
+                id: ride._id,
+                status: ride.status,
+                user_id: ride.user_id,
+                driver_id: ride.driver_id
+            });
+        }
+        
+        res.json({
+            success: true,
+            exists: !!ride,
+            ride: ride ? {
+                id: ride._id,
+                status: ride.status,
+                user_id: ride.user_id,
+                driver_id: ride.driver_id
+            } : null
+        });
+    } catch (err) {
+        console.error('Test ride error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 };

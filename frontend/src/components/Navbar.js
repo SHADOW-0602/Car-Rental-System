@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import CookieManager from '../utils/cookieManager';
+import { useAnalyticsContext } from '../context/AnalyticsContext';
 import VerifiedBadge from './VerifiedBadge';
 import Button from './ui/Button';
 import { theme } from '../styles/theme';
 import { slideDown } from '../animations/variants';
 
 export default function Navbar({ user }) {
+  const { trackOperation } = useAnalyticsContext();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -27,8 +29,8 @@ export default function Navbar({ user }) {
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: `${theme.spacing.md} ${theme.spacing.lg}`,
-    backgroundColor: theme.colors.white,
-    borderBottom: `1px solid ${theme.colors.secondary[200]}`,
+    backgroundColor: '#0f172a',
+    borderBottom: `1px solid #334155`,
     boxShadow: theme.shadows.sm,
     position: 'sticky',
     top: 0,
@@ -53,7 +55,7 @@ export default function Navbar({ user }) {
     alignItems: 'center',
     gap: theme.spacing.md,
     textDecoration: 'none',
-    color: theme.colors.primary[500],
+    color: '#f1f5f9',
     fontSize: theme.typography.fontSize['2xl'],
     fontWeight: theme.typography.fontWeight.bold
   };
@@ -61,10 +63,7 @@ export default function Navbar({ user }) {
   const navLinksStyle = {
     display: 'flex',
     alignItems: 'center',
-    gap: theme.spacing.lg,
-    '@media (max-width: 768px)': {
-      display: 'none'
-    }
+    gap: theme.spacing.lg
   };
 
   const mobileNavLinksStyle = {
@@ -76,7 +75,7 @@ export default function Navbar({ user }) {
 
   const linkStyle = {
     textDecoration: 'none',
-    color: theme.colors.secondary[700],
+    color: '#e2e8f0',
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.medium,
     padding: `${theme.spacing.sm} ${theme.spacing.md}`,
@@ -130,43 +129,48 @@ export default function Navbar({ user }) {
         )}
       </div>
 
-      {/* Mobile Menu Button */}
-      <button
-        className="md:hidden touch-target"
-        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        style={{
-          background: 'none',
-          border: 'none',
-          fontSize: '24px',
-          cursor: 'pointer',
-          color: theme.colors.secondary[700]
-        }}
-      >
-        {isMobileMenuOpen ? '✕' : '☰'}
-      </button>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm, order: 2 }} className="hidden md:flex">
+      <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
         {!user ? (
           <>
             <Link to="/login" style={{ textDecoration: 'none' }}>
-              <button className="tab-btn active" style={{
-                backgroundColor: 'transparent !important',
-                color: '#0099ff !important',
-                border: '2px solid #0099ff'
-              }}>Log in</button>
+              <button 
+                className="tab-btn active" 
+                onClick={() => trackOperation({ type: 'LOGIN_BUTTON_CLICKED', details: { location: 'navbar' } })}
+                style={{
+                  backgroundColor: 'transparent !important',
+                  color: '#0099ff !important',
+                  border: '2px solid #0099ff',
+                  padding: '10px 20px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  borderRadius: '8px'
+                }}
+              >
+                Log in
+              </button>
             </Link>
             <Link to="/signup" style={{ textDecoration: 'none' }}>
-              <button className="tab-btn active" style={{
-                backgroundColor: '#0099ff !important',
-                color: 'white !important',
-                border: '2px solid #0099ff'
-              }}>Sign up</button>
+              <button 
+                className="tab-btn active" 
+                onClick={() => trackOperation({ type: 'SIGNUP_BUTTON_CLICKED', details: { location: 'navbar' } })}
+                style={{
+                  backgroundColor: '#0099ff !important',
+                  color: 'white !important',
+                  border: '2px solid #0099ff',
+                  padding: '10px 20px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  borderRadius: '8px'
+                }}
+              >
+                Sign up
+              </button>
             </Link>
           </>
         ) : (
           <>
 
-            <div style={{ position: 'relative', order: user ? 2 : 0 }} className="profile-dropdown">
+            <div style={{ position: 'relative' }} className="profile-dropdown">
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
               style={{
@@ -203,7 +207,7 @@ export default function Navbar({ user }) {
                 alignItems: 'center',
                 fontSize: theme.typography.fontSize.base,
                 fontWeight: theme.typography.fontWeight.medium,
-                color: theme.colors.secondary[700]
+                color: '#f1f5f9'
               }}>
                 {user.name || user.email}
                 {user.role === 'driver' && <VerifiedBadge isVerified={user.driverInfo?.isVerified} />}
@@ -295,7 +299,7 @@ export default function Navbar({ user }) {
                   )}
                   
                   <Link 
-                    to={user.role === 'driver' ? '/driver/settings' : '/user/settings'} 
+                    to="/settings" 
                     style={{
                       display: 'block',
                       padding: `${theme.spacing.md} ${theme.spacing.lg}`,
@@ -331,6 +335,10 @@ export default function Navbar({ user }) {
               <div style={{ padding: theme.spacing.sm }}>
                 <button
                   onClick={() => {
+                    trackOperation({
+                      type: 'LOGOUT',
+                      details: { method: 'navbar_dropdown' }
+                    });
                     CookieManager.clearUserSession();
                     window.location.href = '/';
                   }}
@@ -353,6 +361,25 @@ export default function Navbar({ user }) {
             )}
           </div>
           </>
+        )}
+
+        
+        {/* Mobile Menu Button - Only show when not logged in */}
+        {!user && (
+          <button
+            className="md:hidden touch-target"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: '24px',
+              cursor: 'pointer',
+              color: theme.colors.secondary[700],
+              marginLeft: theme.spacing.md
+            }}
+          >
+            {isMobileMenuOpen ? '✕' : '☰'}
+          </button>
         )}
       </div>
 
@@ -384,7 +411,6 @@ export default function Navbar({ user }) {
           {!user && (
             <>
               <Link to="/about" style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>About</Link>
-              <Link to="/driver/register" style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>Become a driver</Link>
             </>
           )}
         </div>
@@ -408,7 +434,21 @@ export default function Navbar({ user }) {
               }}>Sign up</button>
             </Link>
             <Link to="/driver/register" style={{ textDecoration: 'none' }} onClick={() => setIsMobileMenuOpen(false)}>
-              <Button variant="success" size="sm" style={{ width: '100%' }}>Become a driver</Button>
+              <button style={{
+                width: '100%',
+                padding: '14px 20px',
+                backgroundColor: '#22c55e',
+                color: 'white',
+                border: '2px solid #22c55e',
+                borderRadius: '12px',
+                fontSize: '16px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)',
+                textTransform: 'none',
+                letterSpacing: '0.5px'
+              }}>🚕 Become a Driver</button>
             </Link>
           </div>
         ) : (
@@ -434,7 +474,7 @@ export default function Navbar({ user }) {
                   </Link>
                 )}
                 
-                <Link to={user.role === 'driver' ? '/driver/settings' : '/user/settings'} style={{ textDecoration: 'none' }} onClick={() => setIsMobileMenuOpen(false)}>
+                <Link to="/settings" style={{ textDecoration: 'none' }} onClick={() => setIsMobileMenuOpen(false)}>
                   <Button variant="secondary" size="sm" icon="⚙️" style={{ width: '100%' }}>Settings</Button>
                 </Link>
                 

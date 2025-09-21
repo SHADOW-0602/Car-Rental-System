@@ -1,10 +1,10 @@
-const TripTracker = require('../services/trackingService');
+const TrackingService = require('../services/TrackingService');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Driver = require('../models/Driver');
 
 module.exports = (io) => {
-    const tripTracker = new TripTracker(io);
+    const trackingService = new TrackingService(io);
 
     // Socket authentication middleware
     io.use(async (socket, next) => {
@@ -63,10 +63,10 @@ module.exports = (io) => {
                 socket.join(`ride_${rideId}`);
                 console.log(`Socket ${encodeURIComponent(socket.id)} (${encodeURIComponent(socket.user.name)}) joined ride ${encodeURIComponent(rideId)}`);
                 
-                // Send current trip status if exists
-                const tripStatus = tripTracker.getTripStatus(rideId);
-                if (tripStatus) {
-                    socket.emit('tripStatus', tripStatus);
+                // Send current tracking status if exists
+                const trackingStatus = trackingService.getTrackingStatus(rideId);
+                if (trackingStatus) {
+                    socket.emit('trackingStatus', trackingStatus);
                 }
             } catch (error) {
                 console.error('Error joining ride:', error);
@@ -97,11 +97,11 @@ module.exports = (io) => {
                     return socket.emit('error', { message: 'Unauthorized to start this trip' });
                 }
                 
-                const tripData = tripTracker.startTracking(rideId, driverLocation, destination);
+                const trackingData = trackingService.startDriverTracking(rideId, driverLocation, destination);
                 
-                io.to(`ride_${rideId}`).emit('tripStarted', {
-                    message: 'Trip started - tracking enabled',
-                    tripData,
+                io.to(`ride_${rideId}`).emit('trackingStarted', {
+                    message: 'Tracking started',
+                    trackingData,
                     timestamp: new Date()
                 });
             } catch (error) {
@@ -127,7 +127,7 @@ module.exports = (io) => {
                     return socket.emit('locationUpdated', { success: false, error: 'Unauthorized' });
                 }
                 
-                const update = tripTracker.updateDriverLocation(rideId, location);
+                const update = trackingService.updateDriverLocation(rideId, location);
                 
                 if (update) {
                     socket.emit('locationUpdated', { success: true, update });
@@ -154,9 +154,9 @@ module.exports = (io) => {
                     return socket.emit('error', { message: 'Unauthorized' });
                 }
                 
-                tripTracker.stopTracking(rideId);
-                io.to(`ride_${rideId}`).emit('tripStopped', {
-                    message: 'Trip tracking stopped',
+                trackingService.stopTracking(rideId);
+                io.to(`ride_${rideId}`).emit('trackingStopped', {
+                    message: 'Tracking stopped',
                     timestamp: new Date()
                 });
             } catch (error) {
@@ -179,7 +179,7 @@ module.exports = (io) => {
                     return socket.emit('error', { message: 'Unauthorized' });
                 }
                 
-                tripTracker.completeTrip(rideId);
+                trackingService.handleTripCompletion(rideId);
             } catch (error) {
                 socket.emit('error', { message: 'Failed to complete trip' });
             }
@@ -207,8 +207,8 @@ module.exports = (io) => {
                     return socket.emit('tripStatus', { error: 'Unauthorized' });
                 }
                 
-                const status = tripTracker.getTripStatus(rideId);
-                socket.emit('tripStatus', status || { error: 'Trip not found' });
+                const status = trackingService.getTrackingStatus(rideId);
+                socket.emit('trackingStatus', status || { error: 'Tracking not found' });
             } catch (error) {
                 socket.emit('tripStatus', { error: 'Failed to get status' });
             }
@@ -219,5 +219,5 @@ module.exports = (io) => {
         });
     });
 
-    return tripTracker;
+    return trackingService;
 };

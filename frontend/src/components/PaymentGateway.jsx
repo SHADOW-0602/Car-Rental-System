@@ -1,14 +1,36 @@
 import React, { useState } from 'react';
+import config from '../config';
 
 export default function PaymentGateway({ ride, onPaymentComplete }) {
   const [processing, setProcessing] = useState(false);
   const [paymentId, setPaymentId] = useState(null);
+  const [error, setError] = useState(null);
+  
+  // Validate ride data
+  if (!ride || !ride._id || !ride.fare) {
+    return (
+      <div style={{
+        padding: '25px',
+        backgroundColor: '#fef2f2',
+        borderRadius: '15px',
+        border: '2px solid #fca5a5',
+        marginBottom: '20px',
+        textAlign: 'center'
+      }}>
+        <div style={{ fontSize: '48px', marginBottom: '10px' }}>❌</div>
+        <h3 style={{ color: '#dc2626' }}>Invalid Ride Data</h3>
+        <p style={{ color: '#7f1d1d' }}>Unable to load ride details for payment.</p>
+      </div>
+    );
+  }
 
   const initiatePayment = async () => {
     setProcessing(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/payments/initiate', {
+      console.log('Initiating payment for ride:', ride._id, 'Amount:', ride.fare, 'Method:', ride.payment_method);
+      
+      const response = await fetch(`${config.API_BASE_URL}/payments/initiate`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -20,9 +42,12 @@ export default function PaymentGateway({ ride, onPaymentComplete }) {
           amount: ride.fare
         })
       });
+      
+      console.log('Payment initiation response status:', response.status);
 
       if (response.ok) {
         const data = await response.json();
+        console.log('Payment initiation successful:', data);
         setPaymentId(data.payment_id);
         
         // Handle different payment methods
@@ -44,11 +69,14 @@ export default function PaymentGateway({ ride, onPaymentComplete }) {
         }
       } else {
         const error = await response.json();
+        console.error('Payment initiation failed:', error);
+        setError(error.error || 'Failed to initiate payment');
         alert(error.error || 'Failed to initiate payment');
       }
     } catch (error) {
-      console.error('Payment initiation error:', error);
-      alert('Failed to initiate payment');
+      console.error('Payment initiation network error:', error);
+      setError('Network error: Failed to initiate payment');
+      alert('Network error: Failed to initiate payment');
     } finally {
       setProcessing(false);
     }
@@ -101,7 +129,7 @@ export default function PaymentGateway({ ride, onPaymentComplete }) {
   const verifyPayment = async (gatewayPaymentId, signature) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/payments/${paymentId}/verify`, {
+      const response = await fetch(`${config.API_BASE_URL}/payments/${paymentId}/verify`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -220,6 +248,21 @@ export default function PaymentGateway({ ride, onPaymentComplete }) {
           </span>
         </div>
       </div>
+
+      {error && (
+        <div style={{
+          padding: '15px',
+          backgroundColor: '#fef2f2',
+          borderRadius: '10px',
+          border: '1px solid #fca5a5',
+          marginBottom: '20px',
+          textAlign: 'center'
+        }}>
+          <p style={{ margin: 0, color: '#dc2626', fontSize: '14px' }}>
+            ⚠️ {error}
+          </p>
+        </div>
+      )}
 
       <div style={{ textAlign: 'center' }}>
         <button

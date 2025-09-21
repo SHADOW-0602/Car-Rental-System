@@ -43,10 +43,58 @@ router.get('/requests', auth, role(['driver']), checkDriverSuspensionForRides, r
 // Accept a ride request
 router.put('/:id/accept', auth, role(['driver']), checkDriverSuspensionForRides, rideController.acceptRideRequest);
 
+// Decline a ride request
+router.put('/:id/decline', auth, role(['driver']), rideController.declineRideRequest);
+
+// Test endpoint to check if ride exists
+router.get('/:id/test', auth, rideController.testRideExists);
+
+// Debug endpoint for ride acceptance
+router.get('/:id/debug', auth, (req, res) => {
+    try {
+        const rideId = req.params.id;
+        console.log('Debug ride acceptance:', {
+            rideId,
+            rideIdLength: rideId?.length,
+            rideIdType: typeof rideId,
+            isValidObjectId: /^[0-9a-fA-F]{24}$/.test(rideId),
+            userId: req.user.id,
+            userRole: req.user.role,
+            timestamp: new Date()
+        });
+        
+        res.json({
+            success: true,
+            debug: {
+                rideId,
+                rideIdLength: rideId?.length,
+                rideIdType: typeof rideId,
+                isValidObjectId: /^[0-9a-fA-F]{24}$/.test(rideId),
+                userId: req.user.id,
+                userRole: req.user.role,
+                timestamp: new Date()
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Simple test endpoint without auth
+router.get('/test-endpoint', (req, res) => {
+    res.json({ success: true, message: 'Rides API is working', timestamp: new Date() });
+});
+
 // Get active trips for admin monitoring
 router.get('/active-trips', auth, role(['admin']), rideController.getActiveTrips);
 
-// Complete ride (driver only)
+// Verify OTP and start ride (driver only)
+router.post('/:rideId/verify-otp', auth, role(['driver']), checkDriverSuspensionForRides, rideController.verifyOTPAndStartRide);
+
+// Complete ride with payment verification (driver only)
+router.put('/:rideId/complete-with-payment', auth, role(['driver']), checkDriverSuspensionForRides, rideController.completeRideWithPayment);
+
+// Complete ride (driver only) - Legacy
 router.put('/:id/complete', auth, role(['driver']), checkDriverSuspensionForRides, rideController.completeRide);
 
 module.exports = router;

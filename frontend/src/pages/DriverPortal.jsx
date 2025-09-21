@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { useAuthContext } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import VerifiedBadge from '../components/VerifiedBadge';
+import DriverRideInterface from '../components/DriverRideInterface';
+
 import api from '../services/api';
 import io from 'socket.io-client';
 import { fadeIn, slideUp, staggerContainer, staggerItem } from '../animations/variants';
@@ -28,10 +30,13 @@ export default function DriverPortal() {
 
     useEffect(() => {
         if (user && user._id) {
+            // Clear existing requests when component mounts
+            setRideRequests([]);
+            
             loadRideRequests();
             loadMyRides();
             loadDriverStats();
-            initializeSocket();
+            const cleanup = initializeSocket();
             getCurrentLocation();
             
             // Set up automatic location updates every 30 seconds
@@ -39,7 +44,10 @@ export default function DriverPortal() {
                 getCurrentLocation();
             }, 30000);
             
-            return () => clearInterval(locationInterval);
+            return () => {
+                clearInterval(locationInterval);
+                if (cleanup) cleanup();
+            };
         }
     }, [user]);
 
@@ -66,6 +74,7 @@ export default function DriverPortal() {
 
         // Listen for ride requests specifically for this driver
         newSocket.on(`driver_notification_${user._id}`, (data) => {
+            console.log('Received driver notification:', data);
             if (data.type === 'ride_request') {
                 const newRequest = {
                     _id: data.rideId,
@@ -79,12 +88,31 @@ export default function DriverPortal() {
                     isPreferred: data.isPreferred || false,
                     timestamp: data.timestamp
                 };
+                console.log('Created new request object:', newRequest);
                 setRideRequests(prev => {
                     const existing = Array.isArray(prev) ? prev : [];
                     const alreadyExists = existing.some(req => req._id === newRequest._id);
-                    return alreadyExists ? existing : [...existing, newRequest];
+                    if (alreadyExists) {
+                        console.log('Request already exists, skipping duplicate');
+                        return existing;
+                    }
+                    console.log('Adding new request to list');
+                    return [...existing, newRequest];
                 });
+            } else if (data.type === 'remove_ride_request') {
+                console.log('Removing ride request:', data.rideId);
+                setRideRequests(prev => prev.filter(req => req._id !== data.rideId));
             }
+        });
+        
+        // Listen for ride no longer available notifications
+        newSocket.on('ride_no_longer_available', (data) => {
+            console.log('Ride no longer available:', data);
+            setRideRequests(prev => {
+                const filtered = prev.filter(req => req._id !== data.rideId);
+                console.log('Removed ride from requests:', data.rideId);
+                return filtered;
+            });
         });
 
         newSocket.on('connect', () => {
@@ -96,7 +124,11 @@ export default function DriverPortal() {
         });
 
         setSocket(newSocket);
-        return () => newSocket.disconnect();
+        
+        return () => {
+            console.log('Cleaning up socket connection');
+            newSocket.disconnect();
+        };
     };
 
     const getCurrentLocation = () => {
@@ -170,12 +202,28 @@ export default function DriverPortal() {
 
     const loadRideRequests = async () => {
         try {
+            console.log('Loading ride requests...');
             const response = await api.get('/rides/requests');
+            console.log('Ride requests response:', response.data);
             const requests = response.data.requests || response.data || [];
-            setRideRequests(Array.isArray(requests) ? requests : []);
+            console.log('Processed requests:', requests);
+            
+            // Only update if we have valid requests and avoid duplicates
+            setRideRequests(prev => {
+                const newRequests = Array.isArray(requests) ? requests : [];
+                // Filter out any duplicates based on _id
+                const uniqueRequests = newRequests.filter(newReq => 
+                    !prev.some(existingReq => existingReq._id === newReq._id)
+                );
+                
+                if (uniqueRequests.length > 0) {
+                    console.log('Adding unique requests:', uniqueRequests.length);
+                    return [...prev, ...uniqueRequests];
+                }
+                return prev;
+            });
         } catch (error) {
             console.error('Error loading requests:', error);
-            setRideRequests([]);
         }
     };
 
@@ -191,23 +239,69 @@ export default function DriverPortal() {
 
     const acceptRide = async (rideId) => {
         try {
+            console.log('Attempting to accept ride:', rideId);
+            
+            // Validate ride ID format
+            if (!rideId || typeof rideId !== 'string' || rideId.length !== 24) {
+                alert('Invalid ride ID format');
+                return;
+            }
+            
+            // Immediately remove from local state to prevent double-clicking
+            setRideRequests(prev => prev.filter(req => req._id !== rideId));
+            
             const response = await api.put(`/rides/${rideId}/accept`);
+            
             if (response.data.success) {
-                alert('Ride accepted!');
-                // Remove from requests and add to active rides
-                setRideRequests(prev => prev.filter(req => req._id !== rideId));
+                alert('Ride accepted successfully!');
                 loadMyRides();
                 loadDriverStats();
+                
+                // Start location updates for live tracking
+                const locationUpdateInterval = setInterval(() => {
+                    getCurrentLocation();
+                }, 10000); // Update every 10 seconds
+                
+                // Store interval ID to clear later
+                window.driverLocationInterval = locationUpdateInterval;
+            } else {
+                alert(response.data.error || 'Failed to accept ride');
+                // Reload requests if acceptance failed
+                loadRideRequests();
             }
         } catch (error) {
             console.error('Accept ride error:', error);
-            alert(error.response?.data?.error || 'Failed to accept ride');
+            // Reload requests if there was an error
+            loadRideRequests();
+            if (error.response?.status === 404) {
+                alert('Ride not found or already accepted by another driver');
+            } else if (error.response?.status === 400) {
+                alert(error.response.data.error || 'Invalid request');
+            } else {
+                alert('Failed to accept ride. Please try again.');
+            }
         }
     };
 
-    const declineRide = (rideId) => {
-        // Simply remove from local state for decline
-        setRideRequests(prev => prev.filter(req => req._id !== rideId));
+    const declineRide = async (rideId) => {
+        try {
+            console.log('Declining ride:', rideId);
+            
+            // Remove from local state immediately
+            setRideRequests(prev => {
+                const filtered = prev.filter(req => req._id !== rideId);
+                console.log('Removed declined ride from local state');
+                return filtered;
+            });
+            
+            // Notify server about decline
+            await api.put(`/rides/${rideId}/decline`);
+            console.log('Server notified about decline');
+            
+        } catch (error) {
+            console.error('Decline ride error:', error);
+            // Keep the ride removed from local state even if server call fails
+        }
     };
 
 
@@ -321,11 +415,27 @@ export default function DriverPortal() {
                         <h2 style={{ marginBottom: '20px' }}>Incoming Ride Requests</h2>
                         
                         {rideRequests.length === 0 ? (
-                            <div className="request-empty">
-                                <div className="request-empty-icon">🚕</div>
-                                <h3 className="request-empty-title">You're Online!</h3>
-                                <p className="request-empty-text">Waiting for ride requests in your area...</p>
-                                <div className="request-status">
+                            <div style={{
+                                textAlign: 'center',
+                                padding: '60px 30px',
+                                backgroundColor: '#f8fafc',
+                                borderRadius: '15px',
+                                border: '2px dashed #cbd5e1'
+                            }}>
+                                <div style={{ fontSize: '64px', marginBottom: '20px' }}>🚕</div>
+                                <h3 style={{ color: '#1e293b', marginBottom: '10px', fontSize: '1.5rem' }}>Ready for Rides!</h3>
+                                <p style={{ color: '#64748b', marginBottom: '20px' }}>You're online and available. Ride requests from nearby passengers will appear here.</p>
+                                <div style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    padding: '8px 16px',
+                                    backgroundColor: '#dcfce7',
+                                    color: '#16a34a',
+                                    borderRadius: '20px',
+                                    fontSize: '14px',
+                                    fontWeight: '600'
+                                }}>
                                     🟢 Available for Rides
                                 </div>
                             </div>
@@ -336,73 +446,187 @@ export default function DriverPortal() {
                                     variants={slideUp}
                                     initial="hidden"
                                     animate="visible"
-                                    className={`request-card ${request.isPreferred ? 'preferred' : ''}`}
+                                    style={{
+                                        backgroundColor: 'white',
+                                        border: request.isPreferred ? '3px solid #f59e0b' : '2px solid #e2e8f0',
+                                        borderRadius: '15px',
+                                        padding: '25px',
+                                        marginBottom: '20px',
+                                        boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+                                        position: 'relative',
+                                        transition: 'all 0.3s ease'
+                                    }}
+                                    whileHover={{ scale: 1.02, boxShadow: '0 8px 25px rgba(0,0,0,0.15)' }}
                                 >
                                     {request.isPreferred && (
-                                        <div className="preferred-badge">
-                                            ⭐ PREFERRED
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '-10px',
+                                            right: '20px',
+                                            backgroundColor: '#f59e0b',
+                                            color: 'white',
+                                            padding: '6px 12px',
+                                            borderRadius: '15px',
+                                            fontSize: '12px',
+                                            fontWeight: '700',
+                                            boxShadow: '0 2px 8px rgba(245, 158, 11, 0.3)'
+                                        }}>
+                                            ⭐ PREFERRED REQUEST
                                         </div>
                                     )}
                                     
-                                    <div className="request-user">
-                                        <div className="request-avatar">
-                                            {request.user_id?.name ? request.user_id.name.charAt(0).toUpperCase() : 'U'}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
+                                        <div style={{
+                                            width: '50px',
+                                            height: '50px',
+                                            borderRadius: '50%',
+                                            backgroundColor: '#667eea',
+                                            color: 'white',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontSize: '20px',
+                                            fontWeight: '700'
+                                        }}>
+                                            {request.user_id?.name ? request.user_id.name.charAt(0).toUpperCase() : '👤'}
                                         </div>
-                                        <div>
-                                            <h3 className="request-user-name">
+                                        <div style={{ flex: 1 }}>
+                                            <h3 style={{ margin: '0 0 5px 0', color: '#1e293b', fontSize: '1.2rem' }}>
                                                 {request.user_id?.name || 'Passenger'}
                                             </h3>
-                                            <p className="request-user-meta">
-                                                {request.vehicle_type?.toUpperCase()} • {request.payment_method?.toUpperCase()}
-                                            </p>
+                                            <div style={{ display: 'flex', gap: '15px', fontSize: '14px', color: '#64748b' }}>
+                                                <span style={{ backgroundColor: '#f1f5f9', padding: '2px 8px', borderRadius: '12px' }}>
+                                                    🚗 {request.vehicle_type?.toUpperCase()}
+                                                </span>
+                                                <span style={{ backgroundColor: '#f1f5f9', padding: '2px 8px', borderRadius: '12px' }}>
+                                                    💳 {request.payment_method?.toUpperCase()}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div style={{ fontSize: '12px', color: '#64748b' }}>Request Time</div>
+                                            <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>
+                                                {request.timestamp ? new Date(request.timestamp).toLocaleTimeString() : 'Just now'}
+                                            </div>
                                         </div>
                                     </div>
                                         
-                                    <div className="request-route">
-                                        <div className="route-item">
-                                            <span className="route-icon">📍</span>
-                                            <span className="route-text">
-                                                {request.pickup_location?.address || 'Pickup location'}
-                                            </span>
+                                    <div style={{ marginBottom: '20px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '12px' }}>
+                                            <div style={{
+                                                width: '20px',
+                                                height: '20px',
+                                                borderRadius: '50%',
+                                                backgroundColor: '#22c55e',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontSize: '12px',
+                                                color: 'white',
+                                                marginTop: '2px'
+                                            }}>
+                                                📍
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>PICKUP LOCATION</div>
+                                                <div style={{ fontSize: '14px', color: '#1e293b', fontWeight: '500' }}>
+                                                    {request.pickup_location?.address || 'Pickup location not specified'}
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="route-item">
-                                            <span className="route-icon destination">🎯</span>
-                                            <span className="route-text">
-                                                {request.drop_location?.address || 'Drop location'}
-                                            </span>
+                                        <div style={{ marginLeft: '10px', width: '2px', height: '15px', backgroundColor: '#d1d5db', marginBottom: '12px' }}></div>
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                            <div style={{
+                                                width: '20px',
+                                                height: '20px',
+                                                borderRadius: '50%',
+                                                backgroundColor: '#ef4444',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontSize: '12px',
+                                                color: 'white',
+                                                marginTop: '2px'
+                                            }}>
+                                                🎯
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>DROP-OFF LOCATION</div>
+                                                <div style={{ fontSize: '14px', color: '#1e293b', fontWeight: '500' }}>
+                                                    {request.drop_location?.address || 'Drop location not specified'}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                         
-                                    <div className="request-details">
-                                        <div className="request-pricing">
-                                            <div className="price-item">
-                                                <div className="price-value">
-                                                    ₹{request.fare || 0}
-                                                </div>
-                                                <div className="price-label">Estimated Fare</div>
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                                        gap: '15px',
+                                        marginBottom: '25px',
+                                        padding: '15px',
+                                        backgroundColor: '#f8fafc',
+                                        borderRadius: '10px'
+                                    }}>
+                                        <div style={{ textAlign: 'center' }}>
+                                            <div style={{ fontSize: '20px', fontWeight: '700', color: '#22c55e', marginBottom: '4px' }}>
+                                                ₹{request.fare || 0}
                                             </div>
-                                            <div className="price-item">
-                                                <div className="distance-value">
-                                                    {request.distance ? `${request.distance} km` : 'N/A'}
-                                                </div>
-                                                <div className="price-label">Distance</div>
-                                            </div>
+                                            <div style={{ fontSize: '12px', color: '#64748b' }}>Estimated Fare</div>
                                         </div>
-                                        <div className="request-time">
-                                            {request.timestamp ? new Date(request.timestamp).toLocaleTimeString() : 'Just now'}
+                                        <div style={{ textAlign: 'center' }}>
+                                            <div style={{ fontSize: '16px', fontWeight: '600', color: '#1e293b', marginBottom: '4px' }}>
+                                                {request.distance ? `${request.distance} km` : 'N/A'}
+                                            </div>
+                                            <div style={{ fontSize: '12px', color: '#64748b' }}>Distance</div>
+                                        </div>
+                                        <div style={{ textAlign: 'center' }}>
+                                            <div style={{ fontSize: '16px', fontWeight: '600', color: '#1e293b', marginBottom: '4px' }}>
+                                                ~{request.distance ? Math.ceil(request.distance * 3) : 0} min
+                                            </div>
+                                            <div style={{ fontSize: '12px', color: '#64748b' }}>Est. Duration</div>
                                         </div>
                                     </div>
                                     
-                                    <div className="request-actions">
+                                    <div style={{ display: 'flex', gap: '12px' }}>
                                         <button
-                                            onClick={() => acceptRide(request._id)}
-                                            className="accept-btn"
+                                            onClick={() => {
+                                                console.log('Accept button clicked for ride:', request._id);
+                                                console.log('Full request object:', request);
+                                                acceptRide(request._id);
+                                            }}
+                                            style={{
+                                                flex: 1,
+                                                padding: '12px 20px',
+                                                backgroundColor: '#22c55e',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '10px',
+                                                fontSize: '16px',
+                                                fontWeight: '600',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.3s ease'
+                                            }}
+                                            onMouseEnter={(e) => e.target.style.backgroundColor = '#16a34a'}
+                                            onMouseLeave={(e) => e.target.style.backgroundColor = '#22c55e'}
                                         >
                                             ✅ Accept Ride
                                         </button>
                                         <button
                                             onClick={() => declineRide(request._id)}
-                                            className="decline-btn"
+                                            style={{
+                                                padding: '12px 20px',
+                                                backgroundColor: '#ef4444',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '10px',
+                                                fontSize: '16px',
+                                                fontWeight: '600',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.3s ease'
+                                            }}
+                                            onMouseEnter={(e) => e.target.style.backgroundColor = '#dc2626'}
+                                            onMouseLeave={(e) => e.target.style.backgroundColor = '#ef4444'}
                                         >
                                             ❌ Decline
                                         </button>
@@ -416,54 +640,127 @@ export default function DriverPortal() {
 
                 {/* Active Rides Tab */}
                 {activeTab === 'active' && (
-                    <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '15px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
-                        <h2 style={{ marginBottom: '20px' }}>Active Rides</h2>
-                        
-                        {myRides.filter(ride => ['accepted', 'in_progress'].includes(ride.status)).map(ride => (
-                            <div key={ride._id} style={{
-                                padding: '20px',
-                                border: '2px solid #22c55e',
-                                borderRadius: '10px',
-                                marginBottom: '15px',
-                                backgroundColor: '#f0fdf4'
-                            }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <div>
-                                        <h3 style={{ margin: '0 0 10px 0' }}>
-                                            {ride.pickup_location?.address} → {ride.drop_location?.address}
-                                        </h3>
-                                        <p style={{ margin: '0 0 5px 0' }}>
-                                            Passenger: {ride.user?.name} • {ride.user?.phone}
-                                        </p>
-                                        <p style={{ margin: 0, color: '#16a34a', fontWeight: '600' }}>
-                                            Status: {ride.status.toUpperCase()}
-                                        </p>
+                    <div>
+                        {myRides.filter(ride => ['accepted', 'in_progress'].includes(ride.status)).length > 0 ? (
+                            myRides.filter(ride => ['accepted', 'in_progress'].includes(ride.status)).map(ride => (
+                                <div key={ride._id} style={{
+                                    backgroundColor: 'white',
+                                    padding: '25px',
+                                    borderRadius: '15px',
+                                    boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+                                    marginBottom: '20px'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                        <h3 style={{ margin: 0, color: '#2d3748' }}>Active Ride</h3>
+                                        <div style={{
+                                            padding: '6px 12px',
+                                            borderRadius: '20px',
+                                            backgroundColor: ride.status === 'accepted' ? '#fef3c7' : '#dcfce7',
+                                            color: ride.status === 'accepted' ? '#d97706' : '#16a34a',
+                                            fontSize: '12px',
+                                            fontWeight: '600'
+                                        }}>
+                                            {ride.status === 'accepted' ? 'PICKUP PASSENGER' : 'RIDE IN PROGRESS'}
+                                        </div>
                                     </div>
+                                    
+                                    <div style={{ marginBottom: '20px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                                            <span style={{ color: '#22c55e' }}>📍</span>
+                                            <span style={{ fontSize: '14px', color: '#64748b' }}>From: {ride.pickup_location?.address}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <span style={{ color: '#ef4444' }}>🎯</span>
+                                            <span style={{ fontSize: '14px', color: '#64748b' }}>To: {ride.drop_location?.address}</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '15px', marginBottom: '20px', padding: '15px', backgroundColor: '#f8fafc', borderRadius: '10px' }}>
+                                        <div style={{ textAlign: 'center' }}>
+                                            <div style={{ fontSize: '16px', fontWeight: '600', color: '#2d3748' }}>{ride.user?.name}</div>
+                                            <div style={{ fontSize: '12px', color: '#64748b' }}>Passenger</div>
+                                        </div>
+                                        <div style={{ textAlign: 'center' }}>
+                                            <div style={{ fontSize: '16px', fontWeight: '600', color: '#22c55e' }}>₹{ride.fare}</div>
+                                            <div style={{ fontSize: '12px', color: '#64748b' }}>Fare</div>
+                                        </div>
+                                        <div style={{ textAlign: 'center' }}>
+                                            <div style={{ fontSize: '16px', fontWeight: '600', color: '#2563eb' }}>{ride.payment_method}</div>
+                                            <div style={{ fontSize: '12px', color: '#64748b' }}>Payment</div>
+                                        </div>
+                                    </div>
+                                    
                                     <div style={{ display: 'flex', gap: '10px' }}>
-                                        <button style={{
-                                            padding: '10px 15px',
-                                            backgroundColor: '#667eea',
-                                            color: 'white',
-                                            border: 'none',
-                                            borderRadius: '8px',
-                                            cursor: 'pointer'
-                                        }}>
-                                            📞 Call
-                                        </button>
-                                        <button style={{
-                                            padding: '10px 15px',
-                                            backgroundColor: '#f59e0b',
-                                            color: 'white',
-                                            border: 'none',
-                                            borderRadius: '8px',
-                                            cursor: 'pointer'
-                                        }}>
-                                            🗺️ Navigate
-                                        </button>
+                                        {ride.status === 'accepted' && (
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        await api.put(`/rides/${ride._id}/start`);
+                                                        loadMyRides();
+                                                    } catch (error) {
+                                                        alert('Failed to start ride');
+                                                    }
+                                                }}
+                                                className="btn btn-success"
+                                                style={{ flex: 1, padding: '12px' }}
+                                            >
+                                                🚀 Start Ride
+                                            </button>
+                                        )}
+                                        {ride.status === 'in_progress' && (
+                                            <>
+                                                <button
+                                                    onClick={async () => {
+                                                        try {
+                                                            await api.put(`/rides/${ride._id}/complete`);
+                                                            loadMyRides();
+                                                        } catch (error) {
+                                                            alert('Failed to complete ride');
+                                                        }
+                                                    }}
+                                                    className="btn btn-success"
+                                                    style={{ flex: 1, padding: '12px' }}
+                                                >
+                                                    ✅ End Ride
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        const paymentUrls = {
+                                                            razorpay: `https://razorpay.com/payment-links/`,
+                                                            stripe: `https://dashboard.stripe.com/payments`,
+                                                            paypal: `https://www.paypal.com/myaccount/transfer`,
+                                                            cash: null
+                                                        };
+                                                        const url = paymentUrls[ride.payment_method];
+                                                        if (url) {
+                                                            window.open(url, '_blank');
+                                                        } else {
+                                                            alert('Cash payment - collect directly from passenger');
+                                                        }
+                                                    }}
+                                                    className="btn btn-primary"
+                                                    style={{ padding: '12px 20px' }}
+                                                >
+                                                    💳 Payment
+                                                </button>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
+                            ))
+                        ) : (
+                            <div style={{
+                                backgroundColor: 'white',
+                                padding: '60px 30px',
+                                borderRadius: '15px',
+                                boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
+                                textAlign: 'center'
+                            }}>
+                                <div style={{ fontSize: '64px', marginBottom: '20px' }}>🚗</div>
+                                <h3 style={{ color: '#2d3748', marginBottom: '10px' }}>No Active Rides</h3>
+                                <p style={{ color: '#64748b' }}>Accept ride requests to see them here</p>
                             </div>
-                        ))}
+                        )}
                     </div>
                 )}
 

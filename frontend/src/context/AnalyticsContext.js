@@ -8,42 +8,91 @@ const AnalyticsContext = createContext();
 
 export function AnalyticsProvider({ children }) {
   const [stats, setStats] = useState(null);
+  const [operationQueue, setOperationQueue] = useState([]);
 
-  useEffect(() => {
-    async function fetchStats() {
-      try {
-        const { token } = CookieManager.getUserSession();
-        if (!token) {
-          console.log('No authentication token found');
-          return;
-        }
-        
-        const res = await axios.get(
-          `${config.API_BASE_URL}/analytics`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        setStats(res.data);
-      } catch (err) {
-        console.error('Analytics fetch error:', err.response?.status, err.response?.data);
-        if (err.response?.status === 400) {
-          console.log('Bad request - likely authentication or permission issue');
-        } else if (err.response?.status === 401) {
-          console.log('Unauthorized - invalid token');
-        } else if (err.response?.status === 403) {
-          console.log('Forbidden - insufficient permissions');
-        }
-        setStats(null);
+  // Track operation function
+  const trackOperation = async (operation) => {
+    const { user } = CookieManager.getUserSession();
+    const timestamp = new Date().toISOString();
+    
+    const analyticsData = {
+      userId: user?.id || 'anonymous',
+      userEmail: user?.email || 'anonymous',
+      userName: user?.name || 'Anonymous User',
+      userRole: user?.role || 'user',
+      operation: operation.type,
+      details: operation.details || {},
+      metadata: {
+        timestamp,
+        userAgent: navigator.userAgent,
+        url: window.location.href,
+        sessionId: sessionStorage.getItem('sessionId') || 'no-session',
+        ...operation.metadata
       }
-    }
-    fetchStats();
+    };
 
-    // Listen for real-time analytics update
-    socket.on('analyticsUpdate', data => setStats(data));
-    return () => socket.off('analyticsUpdate');
+    try {
+      // Send to backend immediately
+      await axios.post(`${config.API_BASE_URL}/analytics/track`, analyticsData, {
+        headers: {
+          'Authorization': `Bearer ${CookieManager.getToken()}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      // Also emit via socket for real-time admin updates
+      if (socket.connected) {
+        socket.emit('analytics_event', analyticsData);
+      }
+    } catch (error) {
+      // Queue for retry if failed
+      setOperationQueue(prev => [...prev, analyticsData]);
+      console.log('Analytics tracking queued:', operation.type);
+    }
+  };
+
+  // Retry queued operations
+  useEffect(() => {
+    if (operationQueue.length > 0) {
+      const retryInterval = setInterval(async () => {
+        const queuedOps = [...operationQueue];
+        setOperationQueue([]);
+        
+        for (const op of queuedOps) {
+          try {
+            await axios.post(`${config.API_BASE_URL}/analytics/track`, op, {
+              headers: {
+                'Authorization': `Bearer ${CookieManager.getToken()}`,
+                'Content-Type': 'application/json'
+              }
+            });
+          } catch (error) {
+            setOperationQueue(prev => [...prev, op]);
+          }
+        }
+      }, 30000); // Retry every 30 seconds
+
+      return () => clearInterval(retryInterval);
+    }
+  }, [operationQueue]);
+
+  // Initialize session tracking
+  useEffect(() => {
+    if (!sessionStorage.getItem('sessionId')) {
+      sessionStorage.setItem('sessionId', Date.now().toString());
+    }
+    
+    const { user } = CookieManager.getUserSession();
+    if (user) {
+      trackOperation({
+        type: 'SESSION_START',
+        details: { loginMethod: 'existing_session' }
+      });
+    }
   }, []);
 
   return (
-    <AnalyticsContext.Provider value={{ stats }}>
+    <AnalyticsContext.Provider value={{ stats, trackOperation }}>
       {children}
     </AnalyticsContext.Provider>
   );

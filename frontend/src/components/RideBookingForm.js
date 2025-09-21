@@ -1,12 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import VehicleCard from './VehicleCard';
 import MapPicker from './MapPicker';
-import DriverCard from './DriverCard';
 import config from '../config';
 import '../styles/main.css';
 
 export default function RideBookingForm({ user, onBooking }) {
+  const [currentStep, setCurrentStep] = useState(1); // 1: Location, 2: Vehicle, 3: Fare, 4: Matching, 5: Confirmed
   const [pickup, setPickup] = useState(null);
   const [drop, setDrop] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -15,9 +14,51 @@ export default function RideBookingForm({ user, onBooking }) {
   const [vehicleType, setVehicleType] = useState('economy');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [fareEstimate, setFareEstimate] = useState(null);
-  const [selectedDriver, setSelectedDriver] = useState(null);
-  const [showDrivers, setShowDrivers] = useState(false);
+  const [surgeMultiplier, setSurgeMultiplier] = useState(1.0);
+  const [matchingDrivers, setMatchingDrivers] = useState([]);
+  const [rideStatus, setRideStatus] = useState('requested');
+  const [eta, setEta] = useState(null);
 
+  // Vehicle types with detailed information
+  const vehicleTypes = [
+    {
+      id: 'economy',
+      name: 'Economy',
+      icon: '🚗',
+      description: 'Affordable rides for everyday trips',
+      baseRate: 15,
+      capacity: 4,
+      features: ['Air conditioning', 'Standard comfort']
+    },
+    {
+      id: 'sedan',
+      name: 'Sedan',
+      icon: '🚙',
+      description: 'Comfortable rides with extra space',
+      baseRate: 20,
+      capacity: 4,
+      features: ['Air conditioning', 'Extra legroom', 'Premium comfort']
+    },
+    {
+      id: 'suv',
+      name: 'SUV',
+      icon: '🚐',
+      description: 'Spacious rides for groups',
+      baseRate: 25,
+      capacity: 6,
+      features: ['Air conditioning', 'Extra space', 'Group friendly']
+    }
+  ];
+
+  // Payment methods
+  const paymentMethods = [
+    { id: 'cash', name: 'Cash', icon: '💵' },
+    { id: 'razorpay', name: 'UPI/Card', icon: '💳' },
+    { id: 'stripe', name: 'International Cards', icon: '🌍' },
+    { id: 'paypal', name: 'PayPal', icon: '🅿️' }
+  ];
+
+  // Calculate fare with surge pricing
   const calculateFare = async () => {
     if (!pickup || !drop) return;
     
@@ -25,46 +66,93 @@ export default function RideBookingForm({ user, onBooking }) {
       const token = localStorage.getItem('token');
       const res = await axios.post(
         `${config.API_BASE_URL}/rides/calculate-fare`,
-        { pickup_location: pickup, drop_location: drop, vehicle_type: vehicleType },
+        { 
+          pickup_location: pickup, 
+          drop_location: drop, 
+          vehicle_type: vehicleType,
+          include_surge: true
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setFareEstimate(res.data);
+      
+      const data = res.data;
+      setFareEstimate(data);
+      setSurgeMultiplier(data.surgeMultiplier || 1.0);
     } catch (err) {
       console.error('Fare calculation failed:', err);
     }
   };
 
-  React.useEffect(() => {
-    calculateFare();
+  // Auto-calculate fare when locations or vehicle type changes
+  useEffect(() => {
+    if (pickup && drop) {
+      calculateFare();
+    }
   }, [pickup, drop, vehicleType]);
 
-  const findDrivers = async () => {
+  // Step 1: Location Selection
+  const handleLocationSubmit = () => {
     if (!pickup || !drop) {
-      alert('Please select both pickup and drop locations on the map.');
+      alert('Please select both pickup and drop locations.');
       return;
     }
+    setCurrentStep(2);
+  };
+
+  // Step 2: Vehicle Selection
+  const handleVehicleSubmit = () => {
+    if (!vehicleType) {
+      alert('Please select a vehicle type.');
+      return;
+    }
+    setCurrentStep(3);
+  };
+
+  // Step 3: Fare Review and Payment
+  const handleFareSubmit = async () => {
     if (!paymentMethod) {
       alert('Please select a payment method.');
       return;
     }
+    setCurrentStep(4);
+    await findAndMatchDrivers();
+  };
+
+  // Find and match drivers
+  const findAndMatchDrivers = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(
+      
+      // First, find nearby drivers
+      const driversRes = await axios.get(
         `${config.API_BASE_URL}/rides/nearby-drivers?latitude=${pickup.latitude}&longitude=${pickup.longitude}&vehicle_type=${vehicleType}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setDrivers(res.data.drivers || []);
-      setShowDrivers(true);
-      setLoading(false);
+      
+      const availableDrivers = driversRes.data.drivers || [];
+      setMatchingDrivers(availableDrivers);
+      
+      if (availableDrivers.length === 0) {
+        alert('No drivers available in your area. Please try again later.');
+        setCurrentStep(3);
+        setLoading(false);
+        return;
+      }
+      
+      // Automatically request ride with best driver
+      await requestRide(availableDrivers[0]._id);
+      
     } catch (err) {
-      setLoading(false);
-      alert(err?.response?.data?.error || 'Failed to find drivers');
+      console.error('Driver matching failed:', err);
+      alert('Failed to find drivers. Please try again.');
+      setCurrentStep(3);
     }
+    setLoading(false);
   };
 
-  const bookRide = async (driverId) => {
-    setLoading(true);
+  // Request ride
+  const requestRide = async (driverId) => {
     try {
       const token = localStorage.getItem('token');
       const res = await axios.post(
@@ -74,536 +162,405 @@ export default function RideBookingForm({ user, onBooking }) {
           drop_location: drop, 
           vehicle_type: vehicleType,
           payment_method: paymentMethod,
-          preferred_driver_id: driverId
+          preferred_driver_id: driverId,
+          surge_multiplier: surgeMultiplier
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setLoading(false);
       
       if (res.data.hasActiveRide) {
         setRide(res.data.ride);
+        setRideStatus('requested');
+        setCurrentStep(5);
         alert(res.data.message);
       } else {
         setRide(res.data.ride);
-        setShowDrivers(false);
+        setRideStatus('requested');
+        setCurrentStep(5);
         if (onBooking) onBooking(res.data);
+        
+        // Start monitoring ride status
+        monitorRideStatus(res.data.ride._id);
       }
     } catch (err) {
-      setLoading(false);
-      alert(err?.response?.data?.error || 'Booking failed');
+      console.error('Ride request failed:', err);
+      alert(err?.response?.data?.error || 'Failed to request ride');
+      setCurrentStep(3);
     }
   };
 
+  // Monitor ride status for real-time updates
+  const monitorRideStatus = (rideId) => {
+    const interval = setInterval(async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(
+          `${config.API_BASE_URL}/rides/${rideId}/status`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        const rideData = res.data.ride;
+        setRideStatus(rideData.status);
+        
+        if (rideData.status === 'accepted') {
+          setEta(rideData.eta);
+        } else if (rideData.status === 'in_progress') {
+          setEta(rideData.eta);
+        } else if (rideData.status === 'completed' || rideData.status === 'cancelled') {
+          clearInterval(interval);
+        }
+      } catch (err) {
+        console.error('Status monitoring failed:', err);
+      }
+    }, 5000); // Check every 5 seconds
+  };
 
+  // Cancel ride
+  const cancelRide = async () => {
+    if (!ride) return;
+    
+    if (!window.confirm('Are you sure you want to cancel this ride?')) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(
+        `${config.API_BASE_URL}/rides/${ride._id}/cancel`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      setRide(null);
+      setRideStatus('cancelled');
+      setCurrentStep(1);
+      alert('Ride cancelled successfully');
+    } catch (err) {
+      console.error('Cancel failed:', err);
+      alert('Failed to cancel ride');
+    }
+  };
+
+  // Reset form
+  const resetForm = () => {
+    setCurrentStep(1);
+    setPickup(null);
+    setDrop(null);
+    setRide(null);
+    setRideStatus('requested');
+    setEta(null);
+    setMatchingDrivers([]);
+  };
 
   return (
-    <div>
-      <form className="booking-form">
-        <h2 className="booking-title">
-          Request Your Ride
-        </h2>
-        
-                 {/* Location Pickers */}
-         <div className="location-grid">
-           {/* Pickup Location */}
-           <div className="location-card">
-             {/* Decorative Background */}
-             <div style={{
-               position: 'absolute',
-               top: '-20px',
-               right: '-20px',
-               width: '80px',
-               height: '80px',
-               backgroundColor: 'rgba(14, 165, 233, 0.1)',
-               borderRadius: '50%'
-             }}></div>
-             
-             <div style={{
-               display: 'flex',
-               alignItems: 'center',
-               marginBottom: '20px'
-             }}>
-               <div style={{
-                 width: '50px',
-                 height: '50px',
-                 background: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)',
-                 borderRadius: '50%',
-                 display: 'flex',
-                 alignItems: 'center',
-                 justifyContent: 'center',
-                 marginRight: '15px',
-                 fontSize: '20px',
-                 color: 'white',
-                 boxShadow: '0 8px 20px rgba(14, 165, 233, 0.3)'
-               }}>
-                 📍
-               </div>
-               <h3 style={{
-                 color: '#0c4a6e',
-                 margin: 0,
-                 fontSize: '1.4rem',
-                 fontWeight: '700'
-               }}>
-                 Pickup Location
-               </h3>
-             </div>
-             
-             <MapPicker label="Select Pickup Location" onLocationSelect={setPickup} autoGetUserLocation={true} />
-             
-             {pickup && (
-               <div style={{
-                 marginTop: '20px',
-                 padding: '16px',
-                 backgroundColor: '#ecfdf5',
-                 borderRadius: '12px',
-                 border: '2px solid #10b981',
-                 boxShadow: '0 4px 12px rgba(16, 185, 129, 0.1)'
-               }}>
-                 <div style={{
-                   display: 'flex',
-                   alignItems: 'center',
-                   gap: '10px'
-                 }}>
-                   <div style={{
-                     width: '24px',
-                     height: '24px',
-                     backgroundColor: '#10b981',
-                     borderRadius: '50%',
-                     display: 'flex',
-                     alignItems: 'center',
-                     justifyContent: 'center',
-                     fontSize: '12px',
-                     color: 'white'
-                   }}>
-                     ✓
-                   </div>
-                   <p style={{
-                     margin: 0,
-                     color: '#065f46',
-                     fontSize: '14px',
-                     fontWeight: '600'
-                   }}>
-                     <strong>📍 Selected:</strong> {pickup.address}
-                   </p>
-                 </div>
-               </div>
-             )}
-           </div>
-
-           {/* Drop-off Location */}
-           <div className="location-card dropoff">
-             {/* Decorative Background */}
-             <div style={{
-               position: 'absolute',
-               bottom: '-20px',
-               left: '-20px',
-               width: '80px',
-               height: '80px',
-               backgroundColor: 'rgba(245, 158, 11, 0.1)',
-               borderRadius: '50%'
-             }}></div>
-             
-             <div style={{
-               display: 'flex',
-               alignItems: 'center',
-               marginBottom: '20px'
-             }}>
-               <div style={{
-                 width: '50px',
-                 height: '50px',
-                 background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                 borderRadius: '50%',
-                 display: 'flex',
-                 alignItems: 'center',
-                 justifyContent: 'center',
-                 marginRight: '15px',
-                 fontSize: '20px',
-                 color: 'white',
-                 boxShadow: '0 8px 20px rgba(245, 158, 11, 0.3)'
-               }}>
-                 🎯
-               </div>
-               <h3 style={{
-                 color: '#92400e',
-                 margin: 0,
-                 fontSize: '1.4rem',
-                 fontWeight: '700'
-               }}>
-                 Drop-off Location
-               </h3>
-             </div>
-             
-             <MapPicker label="Select Drop-off Location" onLocationSelect={setDrop} autoGetUserLocation={false} />
-             
-             {drop && (
-               <div style={{
-                 marginTop: '20px',
-                 padding: '16px',
-                 backgroundColor: '#fef3c7',
-                 borderRadius: '12px',
-                 border: '2px solid #f59e0b',
-                 boxShadow: '0 4px 12px rgba(245, 158, 11, 0.1)'
-               }}>
-                 <div style={{
-                   display: 'flex',
-                   alignItems: 'center',
-                   gap: '10px'
-                 }}>
-                   <div style={{
-                     width: '24px',
-                     height: '24px',
-                     backgroundColor: '#f59e0b',
-                     borderRadius: '50%',
-                     display: 'flex',
-                     alignItems: 'center',
-                     justifyContent: 'center',
-                     fontSize: '12px',
-                     color: 'white'
-                   }}>
-                     ✓
-                   </div>
-                   <p style={{
-                     margin: 0,
-                     color: '#92400e',
-                     fontSize: '14px',
-                     fontWeight: '600'
-                   }}>
-                     <strong>🎯 Selected:</strong> {drop.address}
-                   </p>
-                 </div>
-               </div>
-             )}
-           </div>
-         </div>
-
-        {/* Vehicle Type Selection */}
-        <div className="vehicle-section">
-          <h3 style={{ margin: '0 0 20px 0', color: '#1e293b', fontSize: '1.2rem' }}>🚗 Select Vehicle Type</h3>
-          <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
-            {[
-              { value: 'economy', label: '🚗 Economy', desc: 'Affordable rides' },
-              { value: 'sedan', label: '🚙 Sedan', desc: 'Comfortable rides' },
-              { value: 'suv', label: '🚐 SUV', desc: 'Premium rides' }
-            ].map(vehicle => (
-              <button
-                key={vehicle.value}
-                type="button"
-                onClick={() => setVehicleType(vehicle.value)}
-                style={{
-                  padding: '15px 20px',
-                  border: vehicleType === vehicle.value ? '2px solid #667eea' : '2px solid #e2e8f0',
-                  borderRadius: '12px',
-                  backgroundColor: vehicleType === vehicle.value ? '#f0f4ff' : 'white',
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  minWidth: '120px'
-                }}
-              >
-                <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '5px' }}>{vehicle.label}</div>
-                <div style={{ fontSize: '12px', color: '#64748b' }}>{vehicle.desc}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Payment Method Selection */}
-        <div className="payment-section">
-          <h3 style={{ margin: '0 0 20px 0', color: '#92400e', fontSize: '1.2rem' }}>💳 Select Payment Method</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
-            {[
-              { value: 'cash', label: '💵 Cash', desc: 'Pay with cash' },
-              { value: 'razorpay', label: '💳 Razorpay', desc: 'UPI/Card/Wallet' },
-              { value: 'stripe', label: '💳 Stripe', desc: 'International cards' },
-              { value: 'paypal', label: '🅿️ PayPal', desc: 'PayPal account' }
-            ].map(payment => (
-              <button
-                key={payment.value}
-                type="button"
-                onClick={() => setPaymentMethod(payment.value)}
-                style={{
-                  padding: '15px',
-                  border: paymentMethod === payment.value ? '2px solid #f59e0b' : '2px solid #e2e8f0',
-                  borderRadius: '12px',
-                  backgroundColor: paymentMethod === payment.value ? '#fffbeb' : 'white',
-                  cursor: 'pointer',
-                  textAlign: 'center'
-                }}
-              >
-                <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '5px' }}>{payment.label}</div>
-                <div style={{ fontSize: '11px', color: '#64748b' }}>{payment.desc}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Fare Estimate */}
-        {fareEstimate && (
-          <div className="fare-estimate">
-            <h3 style={{ margin: '0 0 15px 0', color: '#065f46', fontSize: '1.2rem' }}>💰 Fare Estimate</h3>
-            <div style={{ display: 'flex', justifyContent: 'space-around', flexWrap: 'wrap', gap: '15px' }}>
-              <div>
-                <div style={{ fontSize: '24px', fontWeight: '700', color: '#059669' }}>₹{fareEstimate.estimatedFare}</div>
-                <div style={{ fontSize: '12px', color: '#065f46' }}>Total Fare</div>
-              </div>
-              <div>
-                <div style={{ fontSize: '18px', fontWeight: '600', color: '#059669' }}>{fareEstimate.distance} km</div>
-                <div style={{ fontSize: '12px', color: '#065f46' }}>Distance</div>
-              </div>
-              <div>
-                <div style={{ fontSize: '18px', fontWeight: '600', color: '#059669' }}>{fareEstimate.estimatedTime} min</div>
-                <div style={{ fontSize: '12px', color: '#065f46' }}>Est. Time</div>
-              </div>
+    <div className="ride-booking-container">
+      {/* Progress Indicator */}
+      <div className="progress-indicator">
+        {[1, 2, 3, 4, 5].map((step) => (
+          <div
+            key={step}
+            className={`progress-step ${currentStep >= step ? 'active' : ''}`}
+          >
+            <div className="step-number">{step}</div>
+            <div className="step-label">
+              {step === 1 && 'Location'}
+              {step === 2 && 'Vehicle'}
+              {step === 3 && 'Fare'}
+              {step === 4 && 'Matching'}
+              {step === 5 && 'Ride'}
             </div>
           </div>
-        )}
+        ))}
+      </div>
 
-        {/* Find Drivers Button */}
-        <button 
-          type="button"
-          onClick={findDrivers}
-          disabled={loading}
-          className="find-drivers-btn"
-        >
-          {loading ? 'Finding Drivers...' : '🚗 Find Available Drivers'}
-        </button>
-      </form>
-
-      {/* Available Drivers List */}
-      {showDrivers && drivers.length > 0 && (
-        <div className="drivers-section">
-          <div style={{
-            textAlign: 'center',
-            marginBottom: '25px'
-          }}>
-            <h3 style={{
-              color: '#2d3748',
-              margin: '0 0 10px 0',
-              fontSize: '1.6rem',
-              fontWeight: '700'
-            }}>
-              🚗 Choose Your Driver
-            </h3>
-            <p style={{
-              color: '#6b7280',
-              margin: 0,
-              fontSize: '14px'
-            }}>
-              Select a driver and confirm your booking
-            </p>
-          </div>
+      {/* Step 1: Location Selection */}
+      {currentStep === 1 && (
+        <div className="booking-step">
+          <h2>📍 Where are you going?</h2>
           
-          <div style={{
-            display: 'grid',
-            gap: '20px'
-          }}>
-            {drivers.map((driver, index) => (
-              <DriverCard
-                key={driver._id || index}
-                driver={driver}
-                fareEstimate={fareEstimate}
-                vehicleType={vehicleType}
-                isSelected={selectedDriver === driver._id}
-                onSelect={setSelectedDriver}
-                onBook={bookRide}
-                loading={loading}
+          <div className="location-grid">
+            <div className="location-card">
+              <h3>Pickup Location</h3>
+              <MapPicker 
+                label="Select Pickup Location" 
+                onLocationSelect={setPickup} 
+                autoGetUserLocation={true}
+                placeholder="Enter pickup address or use GPS"
               />
-            ))}
+              {pickup && (
+                <div className="location-confirmation">
+                  <span>✓</span>
+                  <span>{pickup.address}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="location-card">
+              <h3>Drop-off Location</h3>
+              <MapPicker 
+                label="Select Drop-off Location" 
+                onLocationSelect={setDrop} 
+                autoGetUserLocation={false}
+                placeholder="Enter destination address"
+              />
+              {drop && (
+                <div className="location-confirmation">
+                  <span>✓</span>
+                  <span>{drop.address}</span>
+                </div>
+              )}
+            </div>
           </div>
-          
-          <div style={{
-            textAlign: 'center',
-            marginTop: '20px'
-          }}>
-            <button
-              onClick={() => setShowDrivers(false)}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: '#6b7280',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '14px',
-                cursor: 'pointer'
-              }}
-            >
-              ← Back to Search
-            </button>
-          </div>
-        </div>
-      )}
-      
-      {/* No Drivers Found */}
-      {showDrivers && drivers.length === 0 && (
-        <div style={{
-          marginTop: '30px',
-          backgroundColor: 'white',
-          borderRadius: '20px',
-          padding: '40px',
-          textAlign: 'center',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.1)'
-        }}>
-          <div style={{ fontSize: '48px', marginBottom: '15px' }}>😔</div>
-          <h3 style={{ color: '#2d3748', marginBottom: '10px' }}>No Drivers Available</h3>
-          <p style={{ color: '#6b7280', marginBottom: '20px' }}>
-            No drivers found in your area. Please try again later.
-          </p>
-          <button
-            onClick={() => setShowDrivers(false)}
-            style={{
-              padding: '12px 24px',
-              backgroundColor: '#667eea',
-              color: 'white',
-              border: 'none',
-              borderRadius: '10px',
-              fontSize: '14px',
-              cursor: 'pointer'
-            }}
+
+          <button 
+            className="btn-primary"
+            onClick={handleLocationSubmit}
+            disabled={!pickup || !drop}
           >
-            ← Try Again
+            Continue to Vehicle Selection
           </button>
         </div>
       )}
 
-      {/* Waiting for Driver Acceptance */}
-      {ride && ride.status === 'requested' && !showDrivers && (
-        <div className="waiting-screen">
-          <div className="waiting-icon">
-            ⏳
-          </div>
+      {/* Step 2: Vehicle Selection */}
+      {currentStep === 2 && (
+        <div className="booking-step">
+          <h2>🚗 Choose your ride</h2>
           
-          <h3 style={{
-            color: '#92400e',
-            margin: '0 0 15px 0',
-            fontSize: '1.8rem',
-            fontWeight: '700'
-          }}>
-            Waiting for Driver Acceptance
-          </h3>
-          
-          <p style={{
-            color: '#2d3748',
-            fontSize: '16px',
-            marginBottom: '25px',
-            lineHeight: '1.6'
-          }}>
-            Your ride request has been sent to nearby drivers.<br/>
-            Please wait while we find a driver for you.
-          </p>
-          
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '20px',
-            marginBottom: '25px'
-          }}>
-            <div style={{
-              padding: '15px',
-              backgroundColor: '#f0f9ff',
-              borderRadius: '12px',
-              border: '1px solid #0ea5e9'
-            }}>
-              <div style={{ fontSize: '20px', marginBottom: '8px' }}>📍</div>
-              <div style={{ fontSize: '14px', color: '#0c4a6e', fontWeight: '600' }}>Pickup</div>
-              <div style={{ fontSize: '12px', color: '#2d3748' }}>{pickup?.address}</div>
-            </div>
-            
-            <div style={{
-              padding: '15px',
-              backgroundColor: '#fef3c7',
-              borderRadius: '12px',
-              border: '1px solid #f59e0b'
-            }}>
-              <div style={{ fontSize: '20px', marginBottom: '8px' }}>🎯</div>
-              <div style={{ fontSize: '14px', color: '#92400e', fontWeight: '600' }}>Destination</div>
-              <div style={{ fontSize: '12px', color: '#2d3748' }}>{drop?.address}</div>
-            </div>
-            
-            <div style={{
-              padding: '15px',
-              backgroundColor: '#ecfdf5',
-              borderRadius: '12px',
-              border: '1px solid #10b981'
-            }}>
-              <div style={{ fontSize: '20px', marginBottom: '8px' }}>💰</div>
-              <div style={{ fontSize: '14px', color: '#065f46', fontWeight: '600' }}>Estimated Fare</div>
-              <div style={{ fontSize: '16px', color: '#059669', fontWeight: '700' }}>₹{fareEstimate?.estimatedFare}</div>
-            </div>
-            
-            <div style={{
-              padding: '15px',
-              backgroundColor: '#f3e8ff',
-              borderRadius: '12px',
-              border: '1px solid #8b5cf6'
-            }}>
-              <div style={{ fontSize: '20px', marginBottom: '8px' }}>{paymentMethod === 'cash' ? '💵' : '💳'}</div>
-              <div style={{ fontSize: '14px', color: '#6b21a8', fontWeight: '600' }}>Payment</div>
-              <div style={{ fontSize: '12px', color: '#2d3748', textTransform: 'capitalize' }}>{paymentMethod}</div>
-            </div>
-          </div>
-          
-          <div style={{
-            padding: '15px',
-            backgroundColor: '#fffbeb',
-            borderRadius: '10px',
-            border: '1px solid #f59e0b',
-            marginBottom: '20px'
-          }}>
-            <p style={{
-              margin: 0,
-              color: '#92400e',
-              fontSize: '14px',
-              fontWeight: '500'
-            }}>
-              💡 Tip: Keep your phone nearby. We'll notify you once a driver accepts your request!
-            </p>
-          </div>
-          
-          <div style={{ textAlign: 'center' }}>
-            <button
-              onClick={async () => {
-                if (!window.confirm('Are you sure you want to cancel this ride?')) return;
-                try {
-                  const token = localStorage.getItem('token');
-                  const response = await fetch(`http://localhost:5000/api/rides/${ride._id}/cancel`, {
-                    method: 'PUT',
-                    headers: {
-                      'Authorization': `Bearer ${token}`,
-                      'Content-Type': 'application/json'
-                    }
-                  });
-                  if (response.ok) {
-                    setRide(null);
-                    alert('Ride cancelled successfully!');
-                  } else {
-                    const error = await response.json();
-                    alert(error.error || 'Failed to cancel ride');
+          <div className="vehicle-grid">
+            {vehicleTypes.map((vehicle) => (
+              <div
+                key={vehicle.id}
+                className={`vehicle-card ${vehicleType === vehicle.id ? 'selected' : ''}`}
+                onClick={() => setVehicleType(vehicle.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setVehicleType(vehicle.id);
                   }
-                } catch (error) {
-                  console.error('Error cancelling ride:', error);
-                  alert('Failed to cancel ride');
-                }
-              }}
-              style={{
-                padding: '12px 24px',
-                backgroundColor: '#ef4444',
-                color: 'white',
-                border: 'none',
-                borderRadius: '10px',
-                fontSize: '16px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = '#dc2626';
-                e.target.style.transform = 'translateY(-2px)';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = '#ef4444';
-                e.target.style.transform = 'translateY(0)';
-              }}
+                }}
+                role="button"
+                tabIndex={0}
+              >
+                <div className="vehicle-icon">{vehicle.icon}</div>
+                <div className="vehicle-info">
+                  <h3>{vehicle.name}</h3>
+                  <p>{vehicle.description}</p>
+                  <div className="vehicle-features">
+                    {vehicle.features.map((feature) => (
+                      <span key={feature} className="feature-tag">{feature}</span>
+                    ))}
+                  </div>
+                  <div className="vehicle-capacity">
+                    Up to {vehicle.capacity} passengers
+                  </div>
+                </div>
+                <div className="vehicle-rate">
+                  ₹{vehicle.baseRate}/km
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="step-actions">
+            <button className="btn-secondary" onClick={() => setCurrentStep(1)}>
+              ← Back
+            </button>
+            <button className="btn-primary" onClick={handleVehicleSubmit}>
+              Continue to Fare Review →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Fare Review and Payment */}
+      {currentStep === 3 && (
+        <div className="booking-step">
+          <h2>💰 Review your trip</h2>
+          
+          {fareEstimate && (
+            <div className="fare-breakdown">
+              <div className="trip-details">
+                <div className="trip-route">
+                  <div className="route-point pickup">
+                    <span className="point-icon">📍</span>
+                    <span>{pickup.address}</span>
+                  </div>
+                  <div className="route-line"></div>
+                  <div className="route-point dropoff">
+                    <span className="point-icon">🎯</span>
+                    <span>{drop.address}</span>
+                  </div>
+                </div>
+                
+                <div className="trip-stats">
+                  <div className="stat">
+                    <span className="stat-label">Distance</span>
+                    <span className="stat-value">{fareEstimate.distance} km</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat-label">Est. Time</span>
+                    <span className="stat-value">{fareEstimate.estimatedTime} min</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat-label">Vehicle</span>
+                    <span className="stat-value">{vehicleTypes.find(v => v.id === vehicleType)?.name}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="fare-details">
+                <div className="fare-line">
+                  <span>Base fare</span>
+                  <span>₹{fareEstimate.baseFare || 50}</span>
+                </div>
+                <div className="fare-line">
+                  <span>Distance ({fareEstimate.distance} km × ₹{vehicleTypes.find(v => v.id === vehicleType)?.baseRate})</span>
+                  <span>₹{Math.round(fareEstimate.distance * (vehicleTypes.find(v => v.id === vehicleType)?.baseRate || 15))}</span>
+                </div>
+                {surgeMultiplier > 1.0 && (
+                  <div className="fare-line surge">
+                    <span>Surge pricing (×{surgeMultiplier})</span>
+                    <span>+₹{Math.round((fareEstimate.estimatedFare * surgeMultiplier) - fareEstimate.estimatedFare)}</span>
+                  </div>
+                )}
+                <div className="fare-line total">
+                  <span>Total</span>
+                  <span>₹{Math.round(fareEstimate.estimatedFare * surgeMultiplier)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="payment-section">
+            <h3>💳 Payment Method</h3>
+            <div className="payment-methods">
+            {paymentMethods.map((method) => (
+              <div
+                key={method.id}
+                className={`payment-method ${paymentMethod === method.id ? 'selected' : ''}`}
+                onClick={() => setPaymentMethod(method.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setPaymentMethod(method.id);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+              >
+                  <span className="payment-icon">{method.icon}</span>
+                  <span className="payment-name">{method.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="step-actions">
+            <button className="btn-secondary" onClick={() => setCurrentStep(2)}>
+              ← Back
+            </button>
+            <button 
+              className="btn-primary"
+              onClick={handleFareSubmit}
+              disabled={!paymentMethod}
             >
-              ❌ Cancel Ride Request
+              Request Ride →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 4: Driver Matching */}
+      {currentStep === 4 && (
+        <div className="booking-step">
+          <h2>🔍 Finding your driver...</h2>
+          
+          <div className="matching-animation">
+            <div className="loading-spinner"></div>
+            <p>Searching for the best driver in your area</p>
+            {matchingDrivers.length > 0 && (
+              <p>Found {matchingDrivers.length} available drivers</p>
+            )}
+          </div>
+
+          {loading && (
+            <div className="matching-steps">
+              <div className="matching-step">
+                <span className="step-icon">🔍</span>
+                <span>Searching nearby drivers...</span>
+              </div>
+              <div className="matching-step">
+                <span className="step-icon">⚡</span>
+                <span>Matching with best driver...</span>
+              </div>
+              <div className="matching-step">
+                <span className="step-icon">📱</span>
+                <span>Sending ride request...</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Step 5: Ride Confirmed and Tracking */}
+      {currentStep === 5 && ride && (
+        <div className="booking-step">
+          <h2>🚗 Your ride is on the way!</h2>
+          
+          <div className="ride-status">
+            <div className="status-indicator">
+              {rideStatus === 'requested' && <span className="status-icon">⏳</span>}
+              {rideStatus === 'accepted' && <span className="status-icon">✅</span>}
+              {rideStatus === 'in_progress' && <span className="status-icon">🚗</span>}
+              {rideStatus === 'completed' && <span className="status-icon">🎉</span>}
+              {rideStatus === 'cancelled' && <span className="status-icon">❌</span>}
+            </div>
+            
+            <div className="status-text">
+              {rideStatus === 'requested' && 'Waiting for driver to accept...'}
+              {rideStatus === 'accepted' && 'Driver accepted! They\'re on the way.'}
+              {rideStatus === 'in_progress' && 'Trip in progress'}
+              {rideStatus === 'completed' && 'Trip completed! Thank you for riding with us.'}
+              {rideStatus === 'cancelled' && 'Ride cancelled'}
+            </div>
+          </div>
+
+          {ride.driver_id && (
+            <div className="driver-info">
+              <h3>Your Driver</h3>
+              <div className="driver-card">
+                <div className="driver-avatar">
+                  {ride.driver_id.name?.charAt(0) || 'D'}
+                </div>
+                <div className="driver-details">
+                  <div className="driver-name">{ride.driver_id.name || 'Driver'}</div>
+                  <div className="driver-rating">
+                    ⭐ {ride.driver_id.rating || '4.5'}
+                  </div>
+                  <div className="driver-vehicle">
+                    {vehicleTypes.find(v => v.id === vehicleType)?.icon} {vehicleTypes.find(v => v.id === vehicleType)?.name}
+                  </div>
+                </div>
+                <div className="driver-actions">
+                  <button className="btn-icon">📞</button>
+                  <button className="btn-icon">💬</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {eta && (
+            <div className="eta-info">
+              <div className="eta-time">{eta} minutes</div>
+              <div className="eta-label">Estimated arrival</div>
+            </div>
+          )}
+
+          <div className="ride-actions">
+            <button className="btn-secondary" onClick={cancelRide}>
+              Cancel Ride
+            </button>
+            <button className="btn-primary" onClick={() => window.location.href = `/track-ride/${ride._id}`}>
+              Track Ride
             </button>
           </div>
         </div>

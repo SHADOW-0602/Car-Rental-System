@@ -3,6 +3,7 @@ import { useAuthContext } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import AdminAnalytics from '../components/AdminAnalytics';
 import LiveMonitoring from '../components/LiveMonitoring';
+import OperationsAnalytics from '../components/OperationsAnalytics';
 import { Button, Card, Badge, Layout } from '../components/ui';
 import { theme } from '../styles/theme';
 import api from '../services/api';
@@ -428,12 +429,13 @@ export default function AdminPortal() {
                 <div className="admin-nav">
                     {[
                         { id: 'trips', label: '🗺️ Live Monitoring', priority: true },
+                        { id: 'operations', label: '📊 Operations Analytics', priority: true },
                         { id: 'drivers', label: '🚕 Drivers', count: drivers.length },
                         { id: 'users', label: '👥 Users', count: users.length },
                         { id: 'verification', label: '📋 Verifications', count: verificationRequests.length, alert: verificationRequests.length > 0 },
                         { id: 'complaints', label: '📞 Support', count: complaints.filter(c => c.status !== 'resolved').length },
                         { id: 'contact', label: '📧 Messages', count: contactMessages.filter(m => !m.reply).length },
-                        { id: 'analytics', label: '📊 Analytics' }
+                        { id: 'analytics', label: '📈 System Analytics' }
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -1229,7 +1231,211 @@ export default function AdminPortal() {
                 )}
 
                 {activeTab === 'trips' && (
-                    <LiveMonitoring />
+                    <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '15px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
+                            <h2 style={{ margin: 0, color: '#1e293b' }}>🗺️ Live Trip Monitoring</h2>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                <div style={{
+                                    padding: '6px 12px',
+                                    backgroundColor: '#dcfce7',
+                                    color: '#16a34a',
+                                    borderRadius: '20px',
+                                    fontSize: '12px',
+                                    fontWeight: '600'
+                                }}>
+                                    🟢 {activeTrips.length} Active Trips
+                                </div>
+                                <button 
+                                    onClick={loadActiveTrips}
+                                    style={{
+                                        padding: '8px 16px',
+                                        backgroundColor: '#667eea',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        fontSize: '12px'
+                                    }}
+                                >
+                                    🔄 Refresh
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {activeTrips.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#64748b' }}>
+                                <div style={{ fontSize: '64px', marginBottom: '20px' }}>🚗</div>
+                                <h3 style={{ color: '#2d3748', marginBottom: '10px' }}>No Active Trips</h3>
+                                <p>All trips are completed. Active rides will appear here for monitoring.</p>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'grid', gap: '20px' }}>
+                                {activeTrips.map(trip => (
+                                    <div key={trip._id} style={{
+                                        border: '2px solid #e2e8f0',
+                                        borderRadius: '15px',
+                                        padding: '25px',
+                                        backgroundColor: '#fafafa',
+                                        transition: 'all 0.3s ease'
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '20px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                                <div style={{
+                                                    width: '50px',
+                                                    height: '50px',
+                                                    borderRadius: '50%',
+                                                    backgroundColor: trip.status === 'in_progress' ? '#f59e0b' : '#667eea',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    fontSize: '24px',
+                                                    color: 'white'
+                                                }}>
+                                                    {trip.status === 'in_progress' ? '🚗' : '📍'}
+                                                </div>
+                                                <div>
+                                                    <h3 style={{ margin: '0 0 5px 0', color: '#1e293b' }}>
+                                                        Trip #{trip._id.slice(-6).toUpperCase()}
+                                                    </h3>
+                                                    <div style={{ display: 'flex', gap: '15px', fontSize: '14px', color: '#64748b' }}>
+                                                        <span>👤 {trip.user_id?.name || 'Unknown User'}</span>
+                                                        <span>🚕 {trip.driver_id?.name || 'Unknown Driver'}</span>
+                                                        <span>🚗 {trip.vehicle_type?.toUpperCase()}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div style={{ textAlign: 'right' }}>
+                                                <div style={{
+                                                    padding: '6px 12px',
+                                                    borderRadius: '15px',
+                                                    fontSize: '12px',
+                                                    fontWeight: '600',
+                                                    backgroundColor: trip.status === 'in_progress' ? '#fef3c7' : 
+                                                                   trip.status === 'accepted' ? '#dbeafe' : '#f1f5f9',
+                                                    color: trip.status === 'in_progress' ? '#d97706' : 
+                                                           trip.status === 'accepted' ? '#2563eb' : '#64748b'
+                                                }}>
+                                                    {trip.status === 'in_progress' ? '🚗 IN PROGRESS' : 
+                                                     trip.status === 'accepted' ? '✅ ACCEPTED' : trip.status?.toUpperCase()}
+                                                </div>
+                                                <div style={{ fontSize: '18px', fontWeight: '700', color: '#22c55e', marginTop: '8px' }}>
+                                                    ₹{trip.fare || 0}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px', marginBottom: '20px' }}>
+                                            <div style={{ padding: '15px', backgroundColor: '#f0fdf4', borderRadius: '10px' }}>
+                                                <div style={{ fontSize: '12px', color: '#16a34a', fontWeight: '600', marginBottom: '5px' }}>📍 PICKUP</div>
+                                                <div style={{ fontSize: '14px', color: '#1e293b' }}>
+                                                    {trip.pickup_location?.address || 'Location not specified'}
+                                                </div>
+                                            </div>
+                                            <div style={{ padding: '15px', backgroundColor: '#fef2f2', borderRadius: '10px' }}>
+                                                <div style={{ fontSize: '12px', color: '#dc2626', fontWeight: '600', marginBottom: '5px' }}>🎯 DROP-OFF</div>
+                                                <div style={{ fontSize: '14px', color: '#1e293b' }}>
+                                                    {trip.drop_location?.address || 'Location not specified'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px', backgroundColor: 'white', borderRadius: '10px' }}>
+                                            <div style={{ display: 'flex', gap: '20px' }}>
+                                                <div>
+                                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Distance</div>
+                                                    <div style={{ fontSize: '16px', fontWeight: '600', color: '#1e293b' }}>
+                                                        {trip.distance?.toFixed(1) || 0} km
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Start Time</div>
+                                                    <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>
+                                                        {trip.timestamps?.started_at ? new Date(trip.timestamps.started_at).toLocaleTimeString() : 
+                                                         trip.timestamps?.accepted_at ? new Date(trip.timestamps.accepted_at).toLocaleTimeString() : 'N/A'}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontSize: '12px', color: '#64748b' }}>End Time</div>
+                                                    <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>
+                                                        {trip.timestamps?.completed_at ? new Date(trip.timestamps.completed_at).toLocaleTimeString() : 'Ongoing'}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Payment</div>
+                                                    <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>
+                                                        {trip.payment_method === 'cash' ? '💵 Cash' : '💳 Online'}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Driver</div>
+                                                    <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>
+                                                        {trip.driver_id?.name || 'Unknown'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '8px' }}>
+                                                <button
+                                                    onClick={() => window.open(`/track-ride/${trip._id}?admin=true`, '_blank')}
+                                                    style={{
+                                                        padding: '8px 16px',
+                                                        backgroundColor: '#667eea',
+                                                        color: 'white',
+                                                        border: 'none',
+                                                        borderRadius: '6px',
+                                                        cursor: 'pointer',
+                                                        fontSize: '12px',
+                                                        fontWeight: '600'
+                                                    }}
+                                                >
+                                                    🗺️ Track
+                                                </button>
+                                                {trip.user_id?.phone && (
+                                                    <button
+                                                        onClick={() => window.open(`tel:${trip.user_id.phone}`)}
+                                                        style={{
+                                                            padding: '8px 16px',
+                                                            backgroundColor: '#22c55e',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: '6px',
+                                                            cursor: 'pointer',
+                                                            fontSize: '12px',
+                                                            fontWeight: '600'
+                                                        }}
+                                                    >
+                                                        📞 User
+                                                    </button>
+                                                )}
+                                                {trip.driver_id?.phone && (
+                                                    <button
+                                                        onClick={() => window.open(`tel:${trip.driver_id.phone}`)}
+                                                        style={{
+                                                            padding: '8px 16px',
+                                                            backgroundColor: '#f59e0b',
+                                                            color: 'white',
+                                                            border: 'none',
+                                                            borderRadius: '6px',
+                                                            cursor: 'pointer',
+                                                            fontSize: '12px',
+                                                            fontWeight: '600'
+                                                        }}
+                                                    >
+                                                        📞 Driver
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'operations' && (
+                    <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '15px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
+                        <OperationsAnalytics />
+                    </div>
                 )}
 
                 {activeTab === 'analytics' && (

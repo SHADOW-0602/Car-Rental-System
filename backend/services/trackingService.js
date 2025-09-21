@@ -1,150 +1,225 @@
 const { calculateDistance } = require('../utils/haversine');
 const Ride = require('../models/Ride');
 
-class TripTracker {
+class TrackingService {
     constructor(io) {
         this.io = io;
-        this.activeTrips = new Map();
+        this.activeRides = new Map();
         this.trackingIntervals = new Map();
     }
 
-    // Start tracking a trip
-    startTracking(rideId, driverLocation, destination) {
-        // Validate and sanitize inputs
-        if (!rideId || typeof rideId !== 'string') {
-            throw new Error('Invalid ride ID');
-        }
-        if (!driverLocation || typeof driverLocation.latitude !== 'number' || typeof driverLocation.longitude !== 'number') {
-            throw new Error('Invalid driver location');
-        }
-        if (!destination || typeof destination.latitude !== 'number' || typeof destination.longitude !== 'number') {
-            throw new Error('Invalid destination');
-        }
-        
-        const tripData = {
-            rideId: String(rideId),
-            currentLocation: {
-                latitude: Number(driverLocation.latitude),
-                longitude: Number(driverLocation.longitude),
-                address: String(driverLocation.address || 'Starting location')
-            },
-            destination: {
-                latitude: Number(destination.latitude),
-                longitude: Number(destination.longitude),
-                address: String(destination.address || 'Destination')
-            },
+    // Start tracking when driver accepts ride
+    startDriverTracking(rideId, driverLocation, pickupLocation) {
+        const trackingData = {
+            rideId,
+            phase: 'driver_arriving',
+            driverLocation,
+            targetLocation: pickupLocation,
             startTime: new Date(),
-            totalDistance: calculateDistance(
-                driverLocation.latitude, driverLocation.longitude,
-                destination.latitude, destination.longitude
-            ),
-            status: 'in_progress'
+            isActive: true
         };
 
-        this.activeTrips.set(rideId, tripData);
-        this.simulateMovement(rideId);
+        this.activeRides.set(rideId, trackingData);
+        this.simulateDriverMovement(rideId);
         
-        return tripData;
+        return trackingData;
     }
 
-    // Simulate driver movement towards destination
-    simulateMovement(rideId) {
-        const interval = setInterval(() => {
-            const trip = this.activeTrips.get(rideId);
-            if (!trip || trip.status === 'completed') {
+    // Start trip tracking when passenger gets in
+    startTripTracking(rideId, pickupLocation, dropLocation) {
+        const existingTracking = this.activeRides.get(rideId);
+        if (existingTracking) {
+            existingTracking.phase = 'in_progress';
+            existingTracking.targetLocation = dropLocation;
+            existingTracking.driverLocation = pickupLocation;
+            existingTracking.tripStartTime = new Date();
+        }
+    }
+
+    // Simulate driver movement (like Uber's real-time tracking)
+    simulateDriverMovement(rideId) {
+        const interval = setInterval(async () => {
+            const tracking = this.activeRides.get(rideId);
+            if (!tracking || !tracking.isActive) {
                 clearInterval(interval);
                 this.trackingIntervals.delete(rideId);
                 return;
             }
 
-            const { currentLocation, destination } = trip;
-            const remainingDistance = calculateDistance(
-                currentLocation.latitude, currentLocation.longitude,
-                destination.latitude, destination.longitude
+            const { driverLocation, targetLocation, phase } = tracking;
+            
+            // Calculate distance to target
+            const distanceToTarget = calculateDistance(
+                driverLocation.latitude, driverLocation.longitude,
+                targetLocation.latitude, targetLocation.longitude
             );
 
-            if (remainingDistance < 0.1) { // Within 100m
-                this.completeTrip(rideId);
+            // Check if arrived
+            if (distanceToTarget < 0.05) { // Within 50 meters
+                if (phase === 'driver_arriving') {
+                    this.handleDriverArrival(rideId);
+                } else if (phase === 'in_progress') {
+                    this.handleTripCompletion(rideId);
+                }
                 return;
             }
 
-            // Move towards destination (simulate 40 km/h average speed)
-            const stepSize = 0.01; // Approximate step in degrees
-            const latDiff = destination.latitude - currentLocation.latitude;
-            const lonDiff = destination.longitude - currentLocation.longitude;
+            // Move driver towards target (simulate movement)
+            const stepSize = 0.001; // Smaller steps for smoother movement
+            const latDiff = targetLocation.latitude - driverLocation.latitude;
+            const lonDiff = targetLocation.longitude - driverLocation.longitude;
             
             const stepLat = latDiff > 0 ? Math.min(stepSize, latDiff) : Math.max(-stepSize, latDiff);
             const stepLon = lonDiff > 0 ? Math.min(stepSize, lonDiff) : Math.max(-stepSize, lonDiff);
 
-            trip.currentLocation.latitude += stepLat;
-            trip.currentLocation.longitude += stepLon;
+            tracking.driverLocation.latitude += stepLat;
+            tracking.driverLocation.longitude += stepLon;
 
-            // Calculate ETA (assuming 40 km/h average speed)
-            const eta = Math.ceil((remainingDistance / 40) * 60); // minutes
+            // Calculate ETA (assuming 30 km/h average speed)
+            const eta = Math.ceil((distanceToTarget / 30) * 60);
 
-            const update = {
+            // Calculate progress
+            let progress = 0;
+            if (phase === 'driver_arriving') {
+                progress = Math.max(0, Math.min(50, 50 - (distanceToTarget * 10)));
+            } else if (phase === 'in_progress') {
+                const totalDistance = tracking.totalTripDistance || distanceToTarget;
+                progress = Math.max(50, Math.min(100, 50 + ((totalDistance - distanceToTarget) / totalDistance) * 50));
+            }
+
+            // Update ride in database
+            try {
+                await Ride.findByIdAndUpdate(rideId, {
+                    'tracking.currentLocation': {
+                        latitude: tracking.driverLocation.latitude,
+                        longitude: tracking.driverLocation.longitude,
+                        address: phase === 'driver_arriving' ? 'Coming to pick you up' : 'En route to destination',
+                        timestamp: new Date()
+                    },
+                    'tracking.eta': eta,
+                    'tracking.progress': progress,
+                    'tracking.lastUpdate': new Date()
+                });
+            } catch (error) {
+                console.error('Error updating ride tracking:', error);
+            }
+
+            // Emit real-time updates
+            const updateData = {
                 rideId,
-                currentLocation: trip.currentLocation,
-                remainingDistance: Math.round(remainingDistance * 100) / 100,
+                currentLocation: {
+                    latitude: tracking.driverLocation.latitude,
+                    longitude: tracking.driverLocation.longitude,
+                    address: phase === 'driver_arriving' ? 'Coming to pick you up' : 'En route to destination'
+                },
                 eta,
-                status: trip.status,
+                progress,
+                phase,
+                distanceToTarget: Math.round(distanceToTarget * 1000) / 1000,
                 timestamp: new Date()
             };
 
-            // Emit to specific ride room with sanitized data
-            const sanitizedUpdate = {
-                rideId: String(rideId),
-                currentLocation: {
-                    latitude: Number(trip.currentLocation.latitude),
-                    longitude: Number(trip.currentLocation.longitude),
-                    address: String(trip.currentLocation.address || 'In transit')
-                },
-                remainingDistance: Number(Math.round(remainingDistance * 100) / 100),
-                eta: Number(eta),
-                status: String(trip.status),
-                timestamp: new Date()
-            };
-            this.io.to(`ride_${String(rideId)}`).emit('locationUpdate', sanitizedUpdate);
+            // Send to user
+            this.io.emit(`ride_tracking_${rideId}`, updateData);
             
-            // Also emit general location update for admin monitoring with sanitized data
-            this.io.emit('driverLocationUpdate', {
-                driverId: String(trip.driverId || `trip_${rideId}`),
-                latitude: Number(trip.currentLocation.latitude),
-                longitude: Number(trip.currentLocation.longitude),
-                address: String(trip.currentLocation.address || 'In transit'),
-                status: 'busy',
-                timestamp: new Date()
-            });
-            
+            // Send to admin
+            this.io.emit('admin_ride_update', updateData);
+
         }, 3000); // Update every 3 seconds
 
         this.trackingIntervals.set(rideId, interval);
     }
 
-    // Complete trip
-    completeTrip(rideId) {
-        const trip = this.activeTrips.get(rideId);
-        if (trip) {
-            trip.status = 'completed';
-            trip.endTime = new Date();
-            
-            this.io.to(`ride_${String(rideId)}`).emit('tripCompleted', {
-                rideId: String(rideId),
-                message: 'Trip completed successfully',
-                duration: Number(Math.ceil((trip.endTime - trip.startTime) / 60000)), // minutes
+    // Handle driver arrival at pickup
+    async handleDriverArrival(rideId) {
+        try {
+            await Ride.findByIdAndUpdate(rideId, {
+                status: 'driver_arriving',
+                'ride_phases.driver_arriving': new Date(),
+                'tracking.progress': 50
+            });
+
+            this.io.emit(`ride_tracking_${rideId}`, {
+                rideId,
+                phase: 'driver_arrived',
+                message: 'Your driver has arrived!',
                 timestamp: new Date()
             });
 
-            // Update ride status in database
-            Ride.findByIdAndUpdate(rideId, { 
-                status: 'completed',
-                completed_at: new Date()
-            }).catch(error => {
-                console.error(`Failed to update ride ${encodeURIComponent(rideId)}:`, error.message);
-            });
-        }
+            // Stop movement simulation temporarily
+            const tracking = this.activeRides.get(rideId);
+            if (tracking) {
+                tracking.isActive = false;
+            }
 
-        this.stopTracking(rideId);
+        } catch (error) {
+            console.error('Error handling driver arrival:', error);
+        }
+    }
+
+    // Handle trip completion
+    async handleTripCompletion(rideId) {
+        try {
+            const ride = await Ride.findById(rideId);
+            if (ride) {
+                await ride.completeRide();
+            }
+
+            this.io.emit(`ride_tracking_${rideId}`, {
+                rideId,
+                phase: 'completed',
+                message: 'Trip completed successfully!',
+                timestamp: new Date()
+            });
+
+            this.stopTracking(rideId);
+
+        } catch (error) {
+            console.error('Error completing trip:', error);
+        }
+    }
+
+    // Manual location update from driver app
+    updateDriverLocation(rideId, location) {
+        const tracking = this.activeRides.get(rideId);
+        if (tracking) {
+            tracking.driverLocation = {
+                latitude: location.latitude,
+                longitude: location.longitude,
+                address: location.address || 'Updated location'
+            };
+
+            // Emit immediate update
+            this.io.emit(`ride_tracking_${rideId}`, {
+                rideId,
+                currentLocation: tracking.driverLocation,
+                timestamp: new Date()
+            });
+
+            return true;
+        }
+        return false;
+    }
+
+    // Get current tracking status
+    getTrackingStatus(rideId) {
+        const tracking = this.activeRides.get(rideId);
+        if (!tracking) return null;
+
+        const distanceToTarget = calculateDistance(
+            tracking.driverLocation.latitude, tracking.driverLocation.longitude,
+            tracking.targetLocation.latitude, tracking.targetLocation.longitude
+        );
+
+        return {
+            rideId,
+            phase: tracking.phase,
+            currentLocation: tracking.driverLocation,
+            targetLocation: tracking.targetLocation,
+            distanceToTarget,
+            eta: Math.ceil((distanceToTarget / 30) * 60),
+            isActive: tracking.isActive
+        };
     }
 
     // Stop tracking
@@ -154,60 +229,19 @@ class TripTracker {
             clearInterval(interval);
             this.trackingIntervals.delete(rideId);
         }
-        this.activeTrips.delete(rideId);
+        this.activeRides.delete(rideId);
     }
 
-    // Get current trip status
-    getTripStatus(rideId) {
-        return this.activeTrips.get(rideId) || null;
-    }
-
-    // Update driver location manually
-    updateDriverLocation(rideId, location) {
-        if (!location || typeof location.latitude !== 'number' || typeof location.longitude !== 'number') {
-            return null;
-        }
-        
-        const trip = this.activeTrips.get(rideId);
-        if (trip) {
-            trip.currentLocation = location;
-            
-            const remainingDistance = calculateDistance(
-                location.latitude, location.longitude,
-                trip.destination.latitude, trip.destination.longitude
-            );
-            
-            const eta = Math.ceil((remainingDistance / 40) * 60);
-
-            const update = {
-                rideId: String(rideId),
-                currentLocation: {
-                    latitude: Number(location.latitude),
-                    longitude: Number(location.longitude),
-                    address: String(location.address || 'Updated location')
-                },
-                remainingDistance: Number(Math.round(remainingDistance * 100) / 100),
-                eta: Number(eta),
-                status: String(trip.status),
-                timestamp: new Date()
-            };
-
-            this.io.to(`ride_${String(rideId)}`).emit('locationUpdate', update);
-            
-            // Also emit general location update for admin monitoring with sanitized data
-            this.io.emit('driverLocationUpdate', {
-                driverId: String(trip.driverId || `manual_${rideId}`),
-                latitude: Number(location.latitude),
-                longitude: Number(location.longitude),
-                address: String(location.address || 'Updated location'),
-                status: 'busy',
-                timestamp: new Date()
-            });
-            
-            return update;
-        }
-        return null;
+    // Emergency stop all tracking for a ride
+    emergencyStop(rideId) {
+        this.stopTracking(rideId);
+        this.io.emit(`ride_tracking_${rideId}`, {
+            rideId,
+            phase: 'stopped',
+            message: 'Tracking stopped',
+            timestamp: new Date()
+        });
     }
 }
 
-module.exports = TripTracker;
+module.exports = TrackingService;

@@ -36,7 +36,7 @@ export default function About() {
                     variants={slideUp}
                     style={{ fontSize: '3.5rem', fontWeight: '800', marginBottom: '20px', textShadow: '0 4px 8px rgba(0,0,0,0.3)' }}
                 >
-                    About RideEasy
+                    About UrbanFleet
                 </motion.h1>
                 <p style={{ fontSize: '1.3rem', opacity: '0.9', maxWidth: '600px', margin: '0 auto' }}>
                     Revolutionizing transportation with cutting-edge technology, premium service, and unmatched reliability.
@@ -54,7 +54,7 @@ export default function About() {
                                 Our Story 📖
                             </h2>
                             <p style={{ fontSize: '1.1rem', color: '#64748b', lineHeight: '1.8', marginBottom: '20px' }}>
-                                Founded in 2024, RideEasy emerged from a simple vision: to make premium transportation accessible, 
+                                Founded in 2024, UrbanFleet emerged from a simple vision: to make premium transportation accessible, 
                                 reliable, and effortless for everyone. We recognized the gap between traditional taxi services and 
                                 the modern traveler's needs.
                             </p>
@@ -84,7 +84,7 @@ export default function About() {
                 <ScrollSlideLeft style={{ marginBottom: '80px' }}>
                     <div style={{ textAlign: 'center', marginBottom: '60px' }}>
                         <h2 style={{ fontSize: '2.5rem', fontWeight: '700', color: '#2d3748', marginBottom: '20px' }}>
-                            Why Choose RideEasy? ⭐
+                            Why Choose UrbanFleet? ⭐
                         </h2>
                         <p style={{ fontSize: '1.2rem', color: '#64748b', maxWidth: '600px', margin: '0 auto' }}>
                             We're not just another ride service. Here's what makes us different.
@@ -175,7 +175,7 @@ export default function About() {
                             Our Values 💝
                         </h2>
                         <p style={{ fontSize: '1.2rem', color: '#64748b', maxWidth: '600px', margin: '0 auto' }}>
-                            These core values guide everything we do at RideEasy.
+                            These core values guide everything we do at UrbanFleet.
                         </p>
                     </div>
 
@@ -214,7 +214,7 @@ export default function About() {
                             Get in Touch 📞
                         </h2>
                         <p style={{ fontSize: '1.2rem', opacity: '0.9', marginBottom: '40px', maxWidth: '600px', margin: '0 auto 40px' }}>
-                            Have questions or want to learn more about RideEasy? We'd love to hear from you!
+                            Have questions or want to learn more about UrbanFleet? We'd love to hear from you!
                         </p>
                         <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
                             <a href="/contact" style={{
@@ -243,7 +243,7 @@ export default function About() {
                                     boxShadow: '0 8px 25px rgba(34, 197, 94, 0.4)',
                                     transition: 'all 0.3s ease'
                                 }}>
-                                    🚀 Join RideEasy
+                                    🚀 Join UrbanFleet
                                 </a>
                             )}
                         </div>

@@ -75,7 +75,22 @@ const checkDriverSuspension = async (req, res, next) => {
 const checkDriverSuspensionForRides = async (req, res, next) => {
     try {
         if (req.user && req.user.role === 'driver') {
-            const driver = await Driver.findById(req.user.id).select('suspension status');
+            // Try to find driver by ID first, then by originalUserId
+            let driver = await Driver.findById(req.user.id).select('suspension status');
+            
+            if (!driver) {
+                // If not found by ID, try to find by originalUserId or email
+                const User = require('../models/User');
+                const user = await User.findById(req.user.id);
+                if (user) {
+                    driver = await Driver.findOne({ 
+                        $or: [
+                            { originalUserId: req.user.id },
+                            { email: user.email }
+                        ]
+                    }).select('suspension status');
+                }
+            }
             
             if (driver && driver.suspension && driver.suspension.isSuspended) {
                 return res.status(403).json({
@@ -96,7 +111,7 @@ const checkDriverSuspensionForRides = async (req, res, next) => {
         next();
     } catch (error) {
         console.error('Error checking driver suspension for rides:', error);
-        next();
+        next(); // Continue even if suspension check fails
     }
 };
 

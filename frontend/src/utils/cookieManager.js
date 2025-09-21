@@ -108,6 +108,26 @@ class CookieManager {
             return false;
         }
     }
+
+    static getUser() {
+        try {
+            const { user } = this.getUserSession();
+            return user;
+        } catch (error) {
+            console.error('Error getting user:', error);
+            return null;
+        }
+    }
+
+    static getToken() {
+        try {
+            const { token } = this.getUserSession();
+            return token;
+        } catch (error) {
+            console.error('Error getting token:', error);
+            return null;
+        }
+    }
 }
 
 export default CookieManager;

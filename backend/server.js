@@ -61,6 +61,22 @@ const Driver = require('./models/Driver');
 const Ride = require('./models/Ride');
 const User = require('./models/User');
 
+// Import route modules
+const rideRoutes = require('./routes/rideRoutes');
+const userRoutes = require('./routes/userRoutes');
+const driverRoutes = require('./routes/driverRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
+const ratingRoutes = require('./routes/ratingRoutes');
+const locationRoutes = require('./routes/locationRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const chatRoutes = require('./routes/chatRoutes');
+const invoiceRoutes = require('./routes/invoiceRoutes');
+const supportRoutes = require('./routes/supportRoutes');
+const securityRoutes = require('./routes/securityRoutes');
+const analyticsRoutes = require('./routes/analytics');
+const setupRoutes = require('./routes/setupRoutes');
+
 app.put('/api/users/settings', auth, async (req, res) => {
   try {
     console.log('[SETTINGS] Request received');
@@ -162,6 +178,7 @@ app.post('/api/admin/contact-messages/:messageId/reply', auth, role(['admin']), 
 // API Routes
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/drivers', require('./routes/driverRoutes'));
+app.use('/api/vehicles', require('./routes/vehicleRoutes'));
 app.use('/api/rides', require('./routes/rideRoutes'));
 app.use('/api/payments', require('./routes/paymentRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
@@ -176,6 +193,7 @@ app.use('/api/setup', require('./routes/setupRoutes'));
 app.use('/api/security', require('./routes/securityRoutes'));
 app.use('/api/support', require('./routes/supportRoutes'));
 app.use('/api/location', require('./routes/locationRoutes'));
+app.use('/api/analytics', require('./routes/analytics'));
 
 // Admin routes
 try {
@@ -345,17 +363,7 @@ app.get('/api/ratings/driver-stats', auth, role(['driver']), async (req, res) =>
   }
 });
 
-// Test endpoint for driver stats (temporary)
-app.get('/api/test/driver-stats/:driverId', async (req, res) => {
-  try {
-    const RatingService = require('./services/ratingService');
-    const ratingService = new RatingService();
-    const stats = await ratingService.getDriverDashboardStats(req.params.driverId);
-    res.json({ success: true, stats });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+
 
 // Fallback admin endpoints with actual data
 app.get('/api/admin/trips', auth, role(['admin']), async (req, res) => {
@@ -649,6 +657,16 @@ app.get('/api/admin/analytics', auth, role(['admin']), async (req, res) => {
   }
 });
 
+// Mount additional route modules
+app.use('/api/admin', adminRoutes);
+app.use('/api/ratings', ratingRoutes);
+app.use('/api/locations', locationRoutes);
+app.use('/api/chats', chatRoutes);
+app.use('/api/support', supportRoutes);
+app.use('/api/security', securityRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/setup', setupRoutes);
+
 // Middleware to update driver lastActive timestamp
 app.use(['/api/drivers/*', '/api/rides/*'], auth, async (req, res, next) => {
   if (req.user && req.user.role === 'driver') {
@@ -898,42 +916,7 @@ app.get('/api/admin/drivers/:driverId/location', auth, role(['admin']), async (r
   }
 });
 
-// Test endpoint to simulate driver location update
-app.post('/api/test/driver-location-update', async (req, res) => {
-  try {
-    const { driverId, latitude, longitude, address, status = 'available' } = req.body;
-    
-    // Update driver location in database
-    const updatedDriver = await Driver.findByIdAndUpdate(driverId, {
-      location: { latitude, longitude, address },
-      lastLocationUpdate: new Date(),
-      lastActive: new Date(),
-      status
-    }, { new: true });
-    
-    if (updatedDriver) {
-      // Emit socket update
-      const io = app.get('io');
-      if (io) {
-        const locationUpdate = {
-          driverId,
-          latitude,
-          longitude,
-          address,
-          status,
-          timestamp: new Date()
-        };
-        io.emit('driverLocationUpdate', locationUpdate);
-      }
-      
-      res.json({ success: true, message: 'Location updated and broadcasted' });
-    } else {
-      res.status(404).json({ success: false, error: 'Driver not found' });
-    }
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+
 
 // Driver portal endpoint
 app.get('/driver/portal', auth, role(['driver']), async (req, res) => {
@@ -1059,74 +1042,9 @@ app.post('/api/driver/upload-documents', auth, role(['driver']), async (req, res
   }
 });
 
-// Test ride simulation endpoint
-app.post('/api/test/start-ride-simulation', async (req, res) => {
-  try {
-    const { rideId, pickup, dropoff, driverId } = req.body;
-    
-    // Update ride status to in_progress
-    await Ride.findByIdAndUpdate(rideId, {
-      status: 'in_progress',
-      startedAt: new Date()
-    });
-    
-    // Update driver location to pickup location
-    await Driver.findByIdAndUpdate(driverId, {
-      location: pickup,
-      lastLocationUpdate: new Date(),
-      lastActive: new Date(),
-      status: 'busy'
-    });
-    
-    // Emit socket update
-    const io = app.get('io');
-    if (io) {
-      io.emit('rideStatusUpdate', {
-        rideId,
-        status: 'in_progress',
-        driverLocation: pickup,
-        timestamp: new Date()
-      });
-    }
-    
-    res.json({ success: true, message: 'Ride simulation started' });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
-// Test settings endpoint
-app.put('/api/test/settings', auth, async (req, res) => {
-  try {
-    console.log('Test settings update - User ID:', encodeURIComponent(req.user.id), 'Role:', encodeURIComponent(req.user.role));
-    
-    const updates = {};
-    Object.keys(req.body).forEach(key => {
-      updates[`settings.${key}`] = req.body[key];
-    });
-    
-    let user;
-    if (req.user.role === 'driver') {
-      user = await Driver.findByIdAndUpdate(
-        req.user.id,
-        { $set: updates },
-        { new: true }
-      );
-    } else {
-      user = await User.findByIdAndUpdate(
-        req.user.id,
-        { $set: updates },
-        { new: true }
-      );
-    }
-    
-    console.log('Updated user settings count:', user?.settings ? Object.keys(user.settings).length : 0);
-    res.json({ success: true, settings: user?.settings || {}, message: 'Test update successful' });
-  } catch (error) {
-    console.error('Test settings error:', error.message);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+
+
 
 // Get user's contact message replies
 app.get('/api/contact-replies', auth, async (req, res) => {
@@ -1164,32 +1082,47 @@ app.get('/api/admin/contact/my-messages', auth, async (req, res) => {
   }
 });
 
-// Role switching endpoint for multi-role users
+// Role switching endpoint for multi-role users and multi-tab support
 app.post('/api/auth/switch-role', auth, async (req, res) => {
   try {
-    const { targetRole } = req.body;
+    const { targetRole, tabId } = req.body;
     const userId = req.user.id;
+    
+    console.log(`[ROLE_SWITCH] User ${userId} switching to ${targetRole} in tab ${tabId}`);
     
     // Check if user has access to target role
     let hasAccess = false;
+    let userData = null;
     
     if (targetRole === 'admin') {
       const Admin = require('./models/Admin');
-      hasAccess = await Admin.findById(userId);
+      userData = await Admin.findById(userId);
+      hasAccess = !!userData;
     } else if (targetRole === 'driver') {
-      hasAccess = await Driver.findById(userId);
+      userData = await Driver.findById(userId);
+      hasAccess = !!userData;
     } else if (targetRole === 'user') {
-      hasAccess = await User.findById(userId);
+      userData = await User.findById(userId);
+      hasAccess = !!userData;
     }
     
     if (!hasAccess) {
-      return res.status(403).json({ success: false, error: 'Access denied for this role' });
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Access denied for this role',
+        availableRoles: await getAvailableRoles(userId)
+      });
     }
     
     // Generate new token with target role
     const jwt = require('jsonwebtoken');
     const newToken = jwt.sign(
-      { id: userId, role: targetRole, roles: req.user.roles || [req.user.role] },
+      { 
+        id: userId, 
+        role: targetRole, 
+        roles: req.user.roles || [req.user.role],
+        tabId: tabId || null
+      },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -1198,8 +1131,64 @@ app.post('/api/auth/switch-role', auth, async (req, res) => {
     const { setAuthCookie } = require('./middleware/cookieAuth');
     setAuthCookie(res, newToken, targetRole);
     
-    res.json({ success: true, role: targetRole, message: 'Role switched successfully' });
+    // Log role switch for analytics
+    console.log(`[ROLE_SWITCH] Success: User ${userId} switched to ${targetRole}`);
+    
+    res.json({ 
+      success: true, 
+      role: targetRole, 
+      token: newToken,
+      user: {
+        id: userData._id,
+        name: userData.name,
+        email: userData.email,
+        role: targetRole
+      },
+      message: 'Role switched successfully' 
+    });
   } catch (error) {
+    console.error('[ROLE_SWITCH] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Helper function to get available roles for a user
+async function getAvailableRoles(userId) {
+  const roles = [];
+  
+  try {
+    const user = await User.findById(userId);
+    if (user) roles.push('user');
+    
+    const driver = await Driver.findById(userId);
+    if (driver) roles.push('driver');
+    
+    const Admin = require('./models/Admin');
+    const admin = await Admin.findById(userId);
+    if (admin) roles.push('admin');
+    
+    return roles;
+  } catch (error) {
+    console.error('Error getting available roles:', error);
+    return ['user']; // Default fallback
+  }
+}
+
+// Multi-tab session management endpoint
+app.get('/api/auth/sessions', auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const availableRoles = await getAvailableRoles(userId);
+    
+    res.json({
+      success: true,
+      currentRole: req.user.role,
+      availableRoles,
+      userId,
+      message: 'Session data retrieved successfully'
+    });
+  } catch (error) {
+    console.error('[SESSIONS] Error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1322,10 +1311,13 @@ app.use(errorHandler);
 app.use('*', (req, res) => {
     console.warn(`[404] Route not found: ${req.method} ${req.originalUrl}`);
     console.warn(`[404] Decoded URL: ${decodeURIComponent(req.originalUrl)}`);
+    console.warn(`[404] Headers:`, req.headers);
     res.status(404).json({
         success: false,
         message: 'Route not found',
-        errorCode: 'ROUTE_NOT_FOUND'
+        errorCode: 'ROUTE_NOT_FOUND',
+        requestedUrl: req.originalUrl,
+        method: req.method
     });
 });
 
