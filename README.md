@@ -408,8 +408,7 @@ This project is licensed under the ISC License - see the [LICENSE](LICENSE) file
 For support and questions:
 
 - Create an issue on GitHub
-- Email: support@carrental.com
-- Documentation: [Project Wiki](https://github.com/yourusername/car-rental-system/wiki)
+- Email: kushagra.singh0602@gmail.com
 
 ## 🙏 Acknowledgments
 
@@ -421,4 +420,4 @@ For support and questions:
 
 ---
 
-**Made with ❤️ for the ride-sharing community**
+**Made with ❤️ for the Rider/User Community**
