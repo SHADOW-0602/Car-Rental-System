@@ -233,22 +233,6 @@ npm run build
 cd backend && npm start
 ```
 
-## 📱 Application URLs
-
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:5000
-- **Admin Panel**: http://localhost:3000/admin
-- **Driver Portal**: http://localhost:3000/driver
-
-## 👤 Default Admin Credentials
-
-After initial setup, use these credentials to access admin panel:
-
-- **Email**: admin@carrental.com
-- **Password**: SecureAdminPass123!
-
-⚠️ **Important**: Change these credentials immediately after first login!
-
 ## 🗂️ Project Structure
 
 ```
@@ -424,8 +408,7 @@ This project is licensed under the ISC License - see the [LICENSE](LICENSE) file
 For support and questions:
 
 - Create an issue on GitHub
-- Email: support@carrental.com
-- Documentation: [Project Wiki](https://github.com/yourusername/car-rental-system/wiki)
+- Email: kushagra.singh0602@gmail.com
 
 ## 🙏 Acknowledgments
 
@@ -437,4 +420,4 @@ For support and questions:
 
 ---
 
-**Made with ❤️ for the ride-sharing community**
+**Made with ❤️ for the Rider/User Community**
