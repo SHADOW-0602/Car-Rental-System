@@ -30,23 +30,25 @@ export default function DriverPortal() {
 
     useEffect(() => {
         if (user && user._id) {
-            // Clear existing requests when component mounts
             setRideRequests([]);
-            
             loadRideRequests();
             loadMyRides();
             loadDriverStats();
-            const cleanup = initializeSocket();
+            
+            // Only initialize socket if not already connected
+            if (!socket) {
+                const cleanup = initializeSocket();
+            }
+            
             getCurrentLocation();
             
-            // Set up automatic location updates every 30 seconds
             const locationInterval = setInterval(() => {
                 getCurrentLocation();
             }, 30000);
             
             return () => {
                 clearInterval(locationInterval);
-                if (cleanup) cleanup();
+                // Don't disconnect socket on component unmount
             };
         }
     }, [user]);
@@ -69,7 +71,12 @@ export default function DriverPortal() {
         }
         
         const newSocket = io('http://localhost:5000', {
-            query: { userId: user._id, role: 'driver' }
+            auth: {
+                token: localStorage.getItem('token'),
+                userId: user._id,
+                role: 'driver'
+            },
+            transports: ['websocket', 'polling']
         });
 
         // Listen for ride requests specifically for this driver
@@ -243,6 +250,7 @@ export default function DriverPortal() {
             
             // Validate ride ID format
             if (!rideId || typeof rideId !== 'string' || rideId.length !== 24) {
+                console.error('Invalid ride ID format:', rideId);
                 alert('Invalid ride ID format');
                 return;
             }
@@ -250,7 +258,9 @@ export default function DriverPortal() {
             // Immediately remove from local state to prevent double-clicking
             setRideRequests(prev => prev.filter(req => req._id !== rideId));
             
+            console.log('Making API call to accept ride...');
             const response = await api.put(`/rides/${rideId}/accept`);
+            console.log('Accept ride response:', response.data);
             
             if (response.data.success) {
                 alert('Ride accepted successfully!');
@@ -260,23 +270,30 @@ export default function DriverPortal() {
                 // Start location updates for live tracking
                 const locationUpdateInterval = setInterval(() => {
                     getCurrentLocation();
-                }, 10000); // Update every 10 seconds
+                }, 10000);
                 
-                // Store interval ID to clear later
                 window.driverLocationInterval = locationUpdateInterval;
             } else {
+                console.error('Accept ride failed:', response.data);
                 alert(response.data.error || 'Failed to accept ride');
-                // Reload requests if acceptance failed
                 loadRideRequests();
             }
         } catch (error) {
             console.error('Accept ride error:', error);
-            // Reload requests if there was an error
+            console.error('Error response:', error.response?.data);
+            console.error('Error status:', error.response?.status);
+            
+            // Re-add the request back to the list if there was an error
             loadRideRequests();
+            
             if (error.response?.status === 404) {
                 alert('Ride not found or already accepted by another driver');
             } else if (error.response?.status === 400) {
-                alert(error.response.data.error || 'Invalid request');
+                alert(error.response.data?.error || 'Invalid request');
+            } else if (error.response?.status === 403) {
+                alert('You are not authorized to accept this ride');
+            } else if (error.response?.status === 401) {
+                alert('Authentication failed. Please login again.');
             } else {
                 alert('Failed to accept ride. Please try again.');
             }
@@ -593,6 +610,7 @@ export default function DriverPortal() {
                                             onClick={() => {
                                                 console.log('Accept button clicked for ride:', request._id);
                                                 console.log('Full request object:', request);
+                                                console.log('User context:', user);
                                                 acceptRide(request._id);
                                             }}
                                             style={{

@@ -173,7 +173,82 @@ app.post('/api/admin/contact-messages/:messageId/reply', auth, role(['admin']), 
   }
 });
 
-
+// Admin login endpoint
+app.post('/api/admin/login', async (req, res) => {
+  try {
+    const { email, password, secretKey } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Email and password are required' 
+      });
+    }
+    
+    const bcrypt = require('bcryptjs');
+    const jwt = require('jsonwebtoken');
+    const Admin = require('./models/Admin');
+    
+    // Find admin by email
+    const admin = await Admin.findOne({ email: email.toLowerCase() });
+    if (!admin) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid credentials' 
+      });
+    }
+    
+    // Check password
+    const isValidPassword = await bcrypt.compare(password, admin.password);
+    if (!isValidPassword) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid credentials' 
+      });
+    }
+    
+    // Check secret key if provided
+    if (secretKey) {
+      const isValidSecretKey = await bcrypt.compare(secretKey, admin.secretKey);
+      if (!isValidSecretKey) {
+        return res.status(401).json({ 
+          success: false, 
+          message: 'Invalid secret key' 
+        });
+      }
+    }
+    
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        id: admin._id, 
+        email: admin.email, 
+        role: 'admin' 
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    
+    res.json({
+      success: true,
+      message: 'Login successful',
+      token,
+      user: {
+        id: admin._id,
+        name: admin.name,
+        email: admin.email,
+        role: 'admin'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Admin login error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Login failed: ' + error.message 
+    });
+  }
+});
 
 // API Routes
 app.use('/api/users', require('./routes/userRoutes'));
@@ -394,23 +469,10 @@ app.get('/api/admin/complaints', auth, role(['admin']), async (req, res) => {
 
 app.get('/api/admin/verification-requests', auth, role(['admin']), async (req, res) => {
   try {
-    // Find drivers who have uploaded documents but are not yet verified
+    // Find drivers who have explicitly applied for verification
     const requests = await Driver.find({
-      $and: [
-        {
-          $or: [
-            { 'driverInfo.isVerified': false },
-            { 'driverInfo.isVerified': { $exists: false } },
-            { 'verificationRequest.status': 'pending' }
-          ]
-        },
-        {
-          $and: [
-            { 'driverInfo.documents.licensePhoto': { $exists: true, $ne: null } },
-            { 'driverInfo.licenseNumber': { $exists: true, $ne: null, $ne: '' } }
-          ]
-        }
-      ]
+      'verificationRequest.status': 'pending',
+      'verificationRequest.submittedAt': { $exists: true }
     }, { 
       name: 1, 
       email: 1, 
@@ -418,7 +480,7 @@ app.get('/api/admin/verification-requests', auth, role(['admin']), async (req, r
       driverInfo: 1, 
       verificationRequest: 1,
       createdAt: 1 
-    }).sort({ createdAt: -1 });
+    }).sort({ 'verificationRequest.submittedAt': -1 });
     
     console.log('Verification requests found:', encodeURIComponent(requests.length));
     res.json(requests);
@@ -466,10 +528,23 @@ app.post('/api/admin/analytics/generate', auth, role(['admin']), async (req, res
     const { date } = req.body;
     const AnalyticsService = require('./services/analyticsService');
     
+    console.log('Generating analytics for date:', date || 'today');
     const analytics = await AnalyticsService.generateDailyAnalytics(date ? new Date(date) : new Date());
     
-    res.json({ success: true, analytics });
+    console.log('Analytics generated successfully:', analytics._id);
+    res.json({ 
+      success: true, 
+      message: 'Analytics generated successfully',
+      analytics: {
+        date: analytics.date,
+        totalRides: analytics.totalRides,
+        completedRides: analytics.completedRides,
+        totalRevenue: analytics.totalRevenue,
+        averageRating: analytics.averageRating
+      }
+    });
   } catch (error) {
+    console.error('Analytics generation error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -616,15 +691,7 @@ app.get('/api/driver/earnings', auth, role(['driver']), async (req, res) => {
 // Real analytics endpoint
 app.get('/api/admin/analytics', auth, role(['admin']), async (req, res) => {
   try {
-    const AnalyticsService = require('./services/analyticsService');
-    
-    // Generate today's analytics
-    await AnalyticsService.generateDailyAnalytics();
-    
-    // Get summary for last 30 days
-    const summary = await AnalyticsService.getAnalyticsSummary(30);
-    
-    // Get current stats
+    // Get current stats directly
     const today = new Date();
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     
@@ -639,20 +706,61 @@ app.get('/api/admin/analytics', auth, role(['admin']), async (req, res) => {
     
     const activeDriversCount = await Driver.countDocuments({ status: 'available' });
     const totalUsers = await User.countDocuments();
+    const totalDrivers = await Driver.countDocuments();
+    const completedRides = await Ride.countDocuments({ status: 'completed' });
+    const totalRides = await Ride.countDocuments();
+    
+    // Calculate completion rate
+    const completionRate = totalRides > 0 ? Math.round((completedRides / totalRides) * 100) : 0;
+    
+    // Get last 7 days data
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      date.setHours(0, 0, 0, 0);
+      const nextDay = new Date(date);
+      nextDay.setDate(nextDay.getDate() + 1);
+      
+      const dayRides = await Ride.countDocuments({
+        createdAt: { $gte: date, $lt: nextDay }
+      });
+      
+      const dayRevenue = await Ride.aggregate([
+        { $match: { createdAt: { $gte: date, $lt: nextDay }, status: 'completed' } },
+        { $group: { _id: null, total: { $sum: '$fare' } } }
+      ]);
+      
+      last7Days.push({
+        date: date.toISOString().split('T')[0],
+        rides: dayRides,
+        revenue: dayRevenue[0]?.total || 0
+      });
+    }
     
     res.json({
       success: true,
       data: {
-        summary,
+        summary: {
+          totalRides,
+          totalRevenue: await Ride.aggregate([
+            { $match: { status: 'completed' } },
+            { $group: { _id: null, total: { $sum: '$fare' } } }
+          ]).then(result => result[0]?.total || 0),
+          completionRate,
+          dailyData: last7Days
+        },
         today: {
           rides: todayRides,
           revenue: todayRevenue[0]?.total || 0,
           activeDrivers: activeDriversCount,
-          totalUsers
+          totalUsers,
+          totalDrivers
         }
       }
     });
   } catch (error) {
+    console.error('Analytics error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

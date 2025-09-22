@@ -13,13 +13,8 @@ const analyticsSchema = new mongoose.Schema({
     averageRideDistance: { type: Number, default: 0 },
     averageRideFare: { type: Number, default: 0 },
     peakHours: [{
-        hour: Number,
-        rideCount: Number
-    }],
-    topRoutes: [{
-        from: String,
-        to: String,
-        count: Number
+        hour: { type: Number },
+        rideCount: { type: Number }
     }],
     paymentMethods: {
         cash: { type: Number, default: 0 },

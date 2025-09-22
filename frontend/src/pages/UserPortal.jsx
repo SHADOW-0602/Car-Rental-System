@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { useAuthContext } from '../context/AuthContext';
 import { useAnalyticsContext } from '../context/AnalyticsContext';
 import Navbar from '../components/Navbar';
@@ -2110,13 +2111,13 @@ export default function UserPortal({ user: propUser }) {
                                         
                                         <div style={{ display: 'flex', gap: '8px' }}>
                                             {(ride.status === 'accepted' || ride.status === 'in_progress') && (
-                                                <button 
-                                                    onClick={() => window.location.href = `/track-ride/${ride._id}`}
+                                                <Link 
+                                                    to={`/track-ride/${ride._id}`}
                                                     className="btn btn-primary"
-                                                    style={{ padding: '6px 16px', fontSize: '12px' }}
+                                                    style={{ padding: '6px 16px', fontSize: '12px', textDecoration: 'none' }}
                                                 >
                                                     📍 Track Ride
-                                                </button>
+                                                </Link>
                                             )}
                                             {ride.status === 'requested' && (
                                                 <button 

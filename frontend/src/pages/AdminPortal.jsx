@@ -519,7 +519,7 @@ export default function AdminPortal() {
                                                     <div><strong>Email:</strong> {user.email}</div>
                                                     <div><strong>Phone:</strong> {user.phone || 'Not provided'}</div>
                                                     <div><strong>Joined:</strong> {new Date(user.createdAt).toLocaleDateString()}</div>
-                                                    <div><strong>Last Login:</strong> {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'Never'}</div>
+                                                    <div><strong>Last Login:</strong> {user.accountStatus?.lastLoginAt ? new Date(user.accountStatus.lastLoginAt).toLocaleString() : 'Never'}</div>
                                                 </div>
                                                 <div style={{ display: 'flex', gap: '15px', fontSize: '14px' }}>
                                                     <div><strong>Total Rides:</strong> {user.totalRides || 0}</div>
@@ -1796,7 +1796,7 @@ export default function AdminPortal() {
                                     <h3 style={{ margin: '0 0 15px 0', color: '#1e293b' }}>Account Activity</h3>
                                     <div style={{ display: 'grid', gap: '10px' }}>
                                         <div><strong>Joined:</strong> {new Date(selectedUser.createdAt).toLocaleDateString()}</div>
-                                        <div><strong>Last Login:</strong> {selectedUser.lastLogin ? new Date(selectedUser.lastLogin).toLocaleString() : 'Never'}</div>
+                                        <div><strong>Last Login:</strong> {selectedUser.accountStatus?.lastLoginAt ? new Date(selectedUser.accountStatus.lastLoginAt).toLocaleString() : 'Never'}</div>
                                         <div><strong>Account Age:</strong> {Math.floor((new Date() - new Date(selectedUser.createdAt)) / (1000 * 60 * 60 * 24))} days</div>
                                         <div><strong>Total Rides:</strong> {selectedUser.totalRides || 0}</div>
                                         <div><strong>Total Spent:</strong> ₹{selectedUser.totalSpent || 0}</div>

@@ -60,7 +60,7 @@ const MapClickHandler = ({ onLocationSelect }) => {
   return null;
 };
 
-export default function MapPicker({ onLocationSelect, label, autoGetUserLocation = false }) {
+export default function MapPicker({ onLocationSelect, label, autoGetUserLocation = false, placeholder }) {
   const [position, setPosition] = useState([28.6139, 77.2090]); // Default to Delhi
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -73,6 +73,15 @@ export default function MapPicker({ onLocationSelect, label, autoGetUserLocation
     // Get user's current location on component mount only if enabled and not already selected
     if (autoGetUserLocation && !selectedLocation) {
       getUserLocation();
+    }
+  }, [autoGetUserLocation]);
+
+  // Reset component when autoGetUserLocation changes
+  useEffect(() => {
+    if (!autoGetUserLocation) {
+      setSelectedLocation(null);
+      setSearchQuery('');
+      setPosition([28.6139, 77.2090]); // Reset to default
     }
   }, [autoGetUserLocation]);
 
@@ -167,8 +176,17 @@ export default function MapPicker({ onLocationSelect, label, autoGetUserLocation
     setSelectedLocation(loc);
     setSearchQuery(loc.address);
     setShowSuggestions(false); // Close suggestions dropdown
-    onLocationSelect(loc);
-    console.log('[MapPicker] Location selection completed');
+    
+    // Ensure unique location object to prevent reference issues
+    const uniqueLocation = {
+      latitude: parseFloat(loc.latitude),
+      longitude: parseFloat(loc.longitude),
+      address: loc.address,
+      timestamp: Date.now() // Add timestamp for uniqueness
+    };
+    
+    onLocationSelect(uniqueLocation);
+    console.log('[MapPicker] Location selection completed:', uniqueLocation);
   };
 
   const clearLocation = () => {
@@ -176,6 +194,7 @@ export default function MapPicker({ onLocationSelect, label, autoGetUserLocation
     setSelectedLocation(null);
     setSearchQuery('');
     setShowSuggestions(false);
+    setPosition([28.6139, 77.2090]); // Reset to default position
     onLocationSelect(null);
     console.log('[MapPicker] Location cleared successfully');
   };
@@ -305,7 +324,7 @@ export default function MapPicker({ onLocationSelect, label, autoGetUserLocation
                 handleInputBlur(e);
               }}
               onKeyPress={handleKeyPress}
-              placeholder={isGettingLocation ? "Getting your location..." : "Search for a location..."}
+              placeholder={isGettingLocation ? "Getting your location..." : (placeholder || "Search for a location...")}
               disabled={isGettingLocation}
               style={{
                 width: '100%',

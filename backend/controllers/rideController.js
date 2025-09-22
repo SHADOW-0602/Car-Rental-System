@@ -259,27 +259,7 @@ exports.updateRideStatus = async (req, res) => {
     }
 };
 
-exports.getUserRides = async (req, res) => {
-    try {
-        const rides = await Ride.find({ user_id: req.user.id })
-            .populate('driver_id', 'name phone rating')
-            .sort({ createdAt: -1 });
-        res.json({ success: true, rides });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-};
-
-exports.getDriverRides = async (req, res) => {
-    try {
-        const rides = await Ride.find({ driver_id: req.user.id })
-            .populate('user_id', 'name phone')
-            .sort({ createdAt: -1 });
-        res.json({ success: true, rides });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-};
+// This duplicate function is removed - see the correct one below
 
 
 
@@ -389,17 +369,22 @@ exports.calculateFare = async (req, res) => {
             drop_location.latitude, drop_location.longitude
         );
         
-        // Base fare calculation
-        const baseFare = 50; // ₹50 base fare
-        const perKmRate = vehicle_type === 'suv' ? 20 : vehicle_type === 'sedan' ? 15 : 12;
-        const fare = baseFare + (distance * perKmRate);
+        // Vehicle type rates (consistent with main calculation)
+        const vehicleRates = {
+            economy: { baseFare: 50, perKm: 15, perMin: 2 },
+            sedan: { baseFare: 70, perKm: 20, perMin: 2.5 },
+            suv: { baseFare: 90, perKm: 25, perMin: 3 }
+        };
+        
+        const rates = vehicleRates[vehicle_type] || vehicleRates.economy;
+        const fare = rates.baseFare + (distance * rates.perKm);
         
         res.json({
             success: true,
             distance: Math.round(distance * 100) / 100,
             estimatedFare: Math.round(fare),
-            baseFare,
-            perKmRate,
+            baseFare: rates.baseFare,
+            perKmRate: rates.perKm,
             estimatedTime: Math.ceil(distance * 3) // 3 minutes per km
         });
     } catch (err) {
@@ -554,7 +539,13 @@ exports.acceptRideRequest = async (req, res) => {
         console.log('Method:', req.method);
         console.log('URL:', req.url);
         console.log('Params:', req.params);
-        console.log('User:', { id: req.user.id, role: req.user.role });
+        console.log('Headers:', req.headers.authorization ? 'Bearer token present' : 'No auth header');
+        console.log('User:', { id: req.user?.id, role: req.user?.role, name: req.user?.name });
+        
+        if (!req.user) {
+            console.log('❌ No user in request');
+            return res.status(401).json({ success: false, error: 'Authentication required' });
+        }
         
         const rideId = req.params.id;
         const driverId = req.user.id;
@@ -563,26 +554,35 @@ exports.acceptRideRequest = async (req, res) => {
         
         // Validate ObjectId format
         if (!rideId || !rideId.match(/^[0-9a-fA-F]{24}$/)) {
-            console.log('Invalid ride ID format:', rideId);
+            console.log('❌ Invalid ride ID format:', rideId);
             return res.status(400).json({ success: false, error: 'Invalid ride ID format' });
         }
         
         // Validate driver ID format
         if (!driverId || !driverId.match(/^[0-9a-fA-F]{24}$/)) {
-            console.log('Invalid driver ID format:', driverId);
+            console.log('❌ Invalid driver ID format:', driverId);
             return res.status(400).json({ success: false, error: 'Invalid driver ID format' });
         }
         
+        console.log('✅ ID validation passed');
+        
+        console.log('🔍 Searching for ride in database...');
         const ride = await Ride.findById(rideId);
         if (!ride) {
-            console.log('Ride not found:', rideId);
+            console.log('❌ Ride not found:', rideId);
             return res.status(404).json({ success: false, error: 'Ride not found' });
         }
         
-        console.log('Found ride with status:', ride.status);
+        console.log('✅ Found ride:', {
+            id: ride._id,
+            status: ride.status,
+            user_id: ride.user_id,
+            driver_id: ride.driver_id,
+            declined_by: ride.declined_by
+        });
         
         if (ride.status !== 'requested') {
-            console.log('Ride status check failed:', {
+            console.log('❌ Ride status check failed:', {
                 rideId,
                 currentStatus: ride.status,
                 expectedStatus: 'requested',
@@ -595,26 +595,31 @@ exports.acceptRideRequest = async (req, res) => {
             });
         }
         
+        console.log('✅ Ride status check passed');
+        
         // Check if driver has already declined this ride
         if (ride.declined_by && ride.declined_by.includes(driverId)) {
-            console.log('Driver has already declined this ride:', { rideId, driverId });
+            console.log('❌ Driver has already declined this ride:', { rideId, driverId });
             return res.status(400).json({ 
                 success: false, 
                 error: 'You have already declined this ride request' 
             });
         }
         
+        console.log('✅ Driver decline check passed');
+        
         // Generate OTP for ride verification
         const otpData = generateOTPWithExpiry(10); // 10 minutes expiry
         
         // Get driver information from Driver model
+        console.log('🔍 Searching for driver in database...');
         const driver = await Driver.findById(driverId).select('name phone rating');
         if (!driver) {
-            console.log('Driver not found in Driver model:', driverId);
+            console.log('❌ Driver not found in Driver model:', driverId);
             return res.status(404).json({ success: false, error: 'Driver not found' });
         }
         
-        console.log('Found driver:', driver.name);
+        console.log('✅ Found driver:', driver.name);
         
         // Calculate distance from driver to user
         const driverLocation = await getDriverCurrentLocation(driverId);
@@ -659,9 +664,9 @@ exports.acceptRideRequest = async (req, res) => {
             lastUpdate: new Date()
         };
         
-        console.log('Saving ride with driver_id:', driverId);
+        console.log('💾 Saving ride with driver_id:', driverId);
         await ride.save();
-        console.log('Ride saved successfully');
+        console.log('✅ Ride saved successfully');
         
         const populatedRide = await Ride.findById(rideId)
             .populate('user_id', 'name phone')
@@ -726,8 +731,8 @@ exports.acceptRideRequest = async (req, res) => {
             });
         }
         
-        console.log('Sending success response with ride:', populatedRide._id);
-        res.json({ success: true, ride: populatedRide });
+        console.log('✅ Sending success response with ride:', populatedRide._id);
+        res.json({ success: true, ride: populatedRide, message: 'Ride accepted successfully' });
     } catch (err) {
         console.error('Accept ride error:', err);
         res.status(500).json({ success: false, error: err.message });
@@ -948,16 +953,23 @@ exports.completeRide = async (req, res) => {
     }
 };
 
-// Get user's rides
+// Get user's rides (includes ALL statuses including 'requested')
 exports.getUserRides = async (req, res) => {
     try {
+        console.log('Getting rides for user:', req.user.id);
+        
         const rides = await Ride.find({ user_id: req.user.id })
             .populate('driver_id', 'name phone rating')
-            .sort({ createdAt: -1 })
-            .limit(20);
+            .sort({ createdAt: -1 });
+        
+        console.log(`Found ${rides.length} rides for user ${req.user.id}`);
+        rides.forEach(ride => {
+            console.log(`Ride ${ride._id}: status=${ride.status}, created=${ride.createdAt}`);
+        });
         
         res.json({ success: true, rides });
     } catch (err) {
+        console.error('Get user rides error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 };
@@ -967,8 +979,7 @@ exports.getDriverRides = async (req, res) => {
     try {
         const rides = await Ride.find({ driver_id: req.user.id })
             .populate('user_id', 'name phone rating')
-            .sort({ createdAt: -1 })
-            .limit(20);
+            .sort({ createdAt: -1 });
         
         res.json({ success: true, rides });
     } catch (err) {
@@ -983,8 +994,13 @@ async function findNearbyDriversWithMatching(pickupLocation, vehicleType, userId
         const availableDrivers = await Driver.find({
             status: 'available',
             'driverInfo.isVerified': true,
-            location: { $exists: true }
-        }).select('name phone rating location lastActive vehicleInfo');
+            location: { $exists: true },
+            $or: [
+                { 'vehicleInfo.type': vehicleType },
+                { 'driverInfo.vehicleType': vehicleType },
+                { vehicle_type: vehicleType }
+            ]
+        }).select('name phone rating location lastActive vehicleInfo driverInfo vehicle_type');
         
         if (availableDrivers.length === 0) {
             return [];
@@ -1011,9 +1027,10 @@ async function findNearbyDriversWithMatching(pickupLocation, vehicleType, userId
             const ratingScore = (driver.rating || 4.0) * 5; // Max 25 points
             score += ratingScore;
             
-            // Vehicle type match
-            if (driver.vehicleInfo && driver.vehicleInfo.type === vehicleType) {
-                score += 15;
+            // Vehicle type exact match bonus
+            const driverVehicleType = driver.vehicleInfo?.type || driver.driverInfo?.vehicleType || driver.vehicle_type;
+            if (driverVehicleType === vehicleType) {
+                score += 20;
             }
             
             // Activity score (more recent activity is better)
@@ -1098,10 +1115,25 @@ exports.calculateFare = async (req, res) => {
     try {
         const { pickup_location, drop_location, vehicle_type, include_surge } = req.body;
         
+        console.log('Fare calculation request:', {
+            pickup: pickup_location?.address || 'No address',
+            drop: drop_location?.address || 'No address',
+            vehicle_type,
+            pickup_coords: `${pickup_location?.latitude}, ${pickup_location?.longitude}`,
+            drop_coords: `${drop_location?.latitude}, ${drop_location?.longitude}`
+        });
+        
         if (!pickup_location || !drop_location) {
             return res.status(400).json({ 
                 success: false, 
                 error: 'Pickup and drop locations are required' 
+            });
+        }
+        
+        if (!pickup_location.latitude || !pickup_location.longitude || !drop_location.latitude || !drop_location.longitude) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Location coordinates are required' 
             });
         }
         
@@ -1111,6 +1143,8 @@ exports.calculateFare = async (req, res) => {
             drop_location.latitude, 
             drop_location.longitude
         );
+        
+        console.log('Calculated distance:', distance, 'km');
         
         // Vehicle type rates
         const vehicleRates = {
@@ -1137,22 +1171,26 @@ exports.calculateFare = async (req, res) => {
         
         const finalFare = Math.round(baseEstimatedFare * surgeMultiplier);
         
-        res.json({
+        const result = {
             success: true,
             distance: distance.toFixed(2),
             baseFare,
             estimatedFare: finalFare,
             estimatedTime,
             vehicle_type,
-            surgeMultiplier: surgeMultiplier.toFixed(2),
+            surgeMultiplier: parseFloat(surgeMultiplier.toFixed(2)),
             fareBreakdown: {
                 baseFare,
                 distanceFare: Math.round(distanceFare),
                 timeFare: Math.round(timeFare),
                 surgeAmount: Math.round((finalFare - baseEstimatedFare))
             }
-        });
+        };
+        
+        console.log('Fare calculation result:', result);
+        res.json(result);
     } catch (err) {
+        console.error('Fare calculation error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 };

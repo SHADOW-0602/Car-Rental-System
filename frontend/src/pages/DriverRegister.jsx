@@ -16,7 +16,7 @@ export default function DriverRegister() {
     driverInfo: {
       licenseNumber: '',
       vehicleType: '',
-      experience: ''
+      drivingExperience: ''
     }
   });
   const [loading, setLoading] = useState(false);
@@ -190,8 +190,8 @@ export default function DriverRegister() {
               <label className="form-label">Driving Experience (Years)</label>
               <input
                 type="number"
-                name="driver.experience"
-                value={formData.driverInfo.experience}
+                name="driver.drivingExperience"
+                value={formData.driverInfo.drivingExperience}
                 onChange={handleChange}
                 placeholder="Years of driving experience"
                 min="1"

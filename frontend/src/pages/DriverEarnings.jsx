@@ -16,7 +16,7 @@ export default function DriverEarnings() {
     const fetchEarnings = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch('/api/driver/earnings', {
+        const response = await fetch('http://localhost:5000/api/driver/earnings', {
           headers: {
             'Authorization': `Bearer ${token}`
           }

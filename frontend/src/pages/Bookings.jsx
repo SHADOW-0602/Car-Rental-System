@@ -19,9 +19,20 @@ export default function Bookings() {
           return;
         }
         
+        console.log('Fetching rides from:', `${config.API_BASE_URL}/rides/mine`);
         const res = await axios.get(`${config.API_BASE_URL}/rides/mine`, {
           headers: { Authorization: `Bearer ${token}` }
         });
+        
+        console.log('Rides API response:', res.data);
+        console.log('Number of rides received:', res.data.rides?.length || 0);
+        
+        if (res.data.rides) {
+          res.data.rides.forEach(ride => {
+            console.log(`Ride ${ride._id}: status=${ride.status}, created=${ride.createdAt}`);
+          });
+        }
+        
         setRides(res.data.rides || []);
       } catch (err) {
         console.error('Error fetching rides:', err.response?.status, err.response?.data);
@@ -76,7 +87,8 @@ export default function Bookings() {
             <div style={{ fontSize: '64px', marginBottom: '20px' }}>🚕</div>
             <h3 style={{ color: '#2d3748', marginBottom: '15px' }}>No Rides Found</h3>
             <p style={{ color: '#718096', fontSize: '16px' }}>
-              You haven't taken any rides yet. Start your journey by booking a ride!
+              You haven't taken any rides yet. Start your journey by booking a ride!<br/>
+              <small style={{ color: '#a0aec0', fontSize: '14px' }}>Requested rides should appear here immediately after booking.</small>
             </p>
           </div>
         ) : (
@@ -156,8 +168,10 @@ export default function Bookings() {
                     fontSize: '12px',
                     fontWeight: '600',
                     backgroundColor: ride.status === 'completed' ? '#38a169' : 
-                                   ride.status === 'active' ? '#667eea' : 
-                                   ride.status === 'cancelled' ? '#e53e3e' : '#ed8936',
+                                   ride.status === 'accepted' ? '#667eea' :
+                                   ride.status === 'in_progress' ? '#3182ce' :
+                                   ride.status === 'requested' ? '#ed8936' :
+                                   ride.status === 'cancelled' ? '#e53e3e' : '#718096',
                     color: 'white'
                   }}>
                     {ride.status?.charAt(0).toUpperCase() + (ride.status?.slice(1) || 'Unknown')}
@@ -285,7 +299,7 @@ export default function Bookings() {
                     </div>
                   )}
                   
-                  {ride.status === 'in_progress' && (
+                  {(ride.status === 'in_progress' || ride.status === 'accepted') && (
                     <a 
                       href={`/track-ride/${ride._id}`}
                       style={{
@@ -298,7 +312,7 @@ export default function Bookings() {
                         fontSize: '14px'
                       }}
                     >
-                      🚗 Track Live
+                      {ride.status === 'accepted' ? '📍 Track Driver' : '🚗 Track Live'}
                     </a>
                   )}
                 </div>

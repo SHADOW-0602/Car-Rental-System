@@ -17,6 +17,11 @@ class MarketingService {
         cron.schedule('0 10 * * 5', () => {
             this.sendWeekendSpecials();
         });
+
+        // Send driver bonus emails every Wednesday at 2 PM
+        cron.schedule('0 14 * * 3', () => {
+            this.sendDriverBonusEmails();
+        });
     }
 
     async sendWeeklyMarketingEmails() {
@@ -27,14 +32,17 @@ class MarketingService {
             }).select('name email');
 
             for (const user of users) {
-                const content = emailService.getMarketingTemplate(user.name, 'loyalty');
-                await emailService.sendMarketingEmail(
-                    user.email,
-                    'Special Offers Just for You!',
-                    content
-                );
+                const promoData = {
+                    title: 'Weekly Special Offer',
+                    description: 'Your weekly dose of savings is here! Enjoy exclusive discounts on all rides.',
+                    discount: '25%',
+                    subtitle: 'On all rides this week',
+                    code: 'WEEKLY25',
+                    validUntil: 'Sunday midnight'
+                };
+                await emailService.sendPromotionalEmail(user, promoData, 'user');
             }
-            console.log(`Marketing emails sent to ${users.length} users`);
+            console.log(`📧 Enhanced marketing emails sent to ${users.length} users`);
         } catch (error) {
             console.error('Marketing email batch failed:', error);
         }
@@ -48,27 +56,50 @@ class MarketingService {
             }).select('name email');
 
             for (const user of users) {
-                const content = emailService.getMarketingTemplate(user.name, 'weekend');
-                await emailService.sendMarketingEmail(
-                    user.email,
-                    'Weekend Special - Save 15%!',
-                    content
-                );
+                const promoData = {
+                    title: 'Weekend Getaway Special',
+                    description: 'Make your weekend rides more affordable with our exclusive weekend discount!',
+                    discount: '20%',
+                    subtitle: 'On weekend rides',
+                    code: 'WEEKEND20',
+                    validUntil: 'Sunday 11:59 PM'
+                };
+                await emailService.sendPromotionalEmail(user, promoData, 'user');
             }
-            console.log(`Weekend specials sent to ${users.length} users`);
+            console.log(`🎆 Enhanced weekend specials sent to ${users.length} users`);
         } catch (error) {
             console.error('Weekend specials batch failed:', error);
         }
     }
 
-    async sendWelcomeEmail(user) {
+    async sendWelcomeEmail(user, role = 'user') {
         if (user.settings?.marketingEmails && user.settings?.emailNotifications) {
-            const content = emailService.getMarketingTemplate(user.name, 'welcome');
-            await emailService.sendMarketingEmail(
-                user.email,
-                'Welcome to Car Rental System!',
-                content
-            );
+            await emailService.sendWelcomeEmail(user, role);
+        }
+    }
+
+    async sendDriverBonusEmails() {
+        try {
+            const Driver = require('../models/Driver');
+            const drivers = await Driver.find({
+                status: 'active',
+                'settings.emailNotifications': true
+            }).select('name email');
+
+            for (const driver of drivers) {
+                const promoData = {
+                    title: 'Driver Earnings Boost',
+                    description: 'Complete more rides and earn bonus rewards! Your dedication deserves extra rewards.',
+                    bonusAmount: '200',
+                    subtitle: 'Extra bonus per ride',
+                    condition: 'Complete 15 rides this week',
+                    validUntil: 'end of this week'
+                };
+                await emailService.sendPromotionalEmail(driver, promoData, 'driver');
+            }
+            console.log(`🚗 Driver bonus emails sent to ${drivers.length} drivers`);
+        } catch (error) {
+            console.error('Driver bonus email batch failed:', error);
         }
     }
 }

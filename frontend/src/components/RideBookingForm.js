@@ -19,14 +19,16 @@ export default function RideBookingForm({ user, onBooking }) {
   const [rideStatus, setRideStatus] = useState('requested');
   const [eta, setEta] = useState(null);
 
-  // Vehicle types with detailed information
+  // Vehicle types with detailed information (matching backend rates)
   const vehicleTypes = [
     {
       id: 'economy',
       name: 'Economy',
       icon: '🚗',
       description: 'Affordable rides for everyday trips',
+      baseFare: 50,
       baseRate: 15,
+      perMin: 2,
       capacity: 4,
       features: ['Air conditioning', 'Standard comfort']
     },
@@ -35,7 +37,9 @@ export default function RideBookingForm({ user, onBooking }) {
       name: 'Sedan',
       icon: '🚙',
       description: 'Comfortable rides with extra space',
+      baseFare: 70,
       baseRate: 20,
+      perMin: 2.5,
       capacity: 4,
       features: ['Air conditioning', 'Extra legroom', 'Premium comfort']
     },
@@ -44,7 +48,9 @@ export default function RideBookingForm({ user, onBooking }) {
       name: 'SUV',
       icon: '🚐',
       description: 'Spacious rides for groups',
+      baseFare: 90,
       baseRate: 25,
+      perMin: 3,
       capacity: 6,
       features: ['Air conditioning', 'Extra space', 'Group friendly']
     }
@@ -60,7 +66,16 @@ export default function RideBookingForm({ user, onBooking }) {
 
   // Calculate fare with surge pricing
   const calculateFare = async () => {
-    if (!pickup || !drop) return;
+    if (!pickup || !drop) {
+      console.log('Cannot calculate fare - missing locations:', { pickup: !!pickup, drop: !!drop });
+      return;
+    }
+    
+    console.log('Calculating fare for:', {
+      pickup: pickup.address,
+      drop: drop.address,
+      vehicleType
+    });
     
     try {
       const token = localStorage.getItem('token');
@@ -76,10 +91,12 @@ export default function RideBookingForm({ user, onBooking }) {
       );
       
       const data = res.data;
+      console.log('Fare calculation result:', data);
       setFareEstimate(data);
-      setSurgeMultiplier(data.surgeMultiplier || 1.0);
+      setSurgeMultiplier(parseFloat(data.surgeMultiplier) || 1.0);
     } catch (err) {
       console.error('Fare calculation failed:', err);
+      setFareEstimate(null);
     }
   };
 
@@ -140,8 +157,8 @@ export default function RideBookingForm({ user, onBooking }) {
         return;
       }
       
-      // Automatically request ride with best driver
-      await requestRide(availableDrivers[0]._id);
+      // Just request ride without preferred driver - let drivers accept
+      await requestRide(null);
       
     } catch (err) {
       console.error('Driver matching failed:', err);
@@ -152,7 +169,7 @@ export default function RideBookingForm({ user, onBooking }) {
   };
 
   // Request ride
-  const requestRide = async (driverId) => {
+  const requestRide = async (driverId = null) => {
     try {
       const token = localStorage.getItem('token');
       const res = await axios.post(
@@ -162,7 +179,7 @@ export default function RideBookingForm({ user, onBooking }) {
           drop_location: drop, 
           vehicle_type: vehicleType,
           payment_method: paymentMethod,
-          preferred_driver_id: driverId,
+          ...(driverId && { preferred_driver_id: driverId }),
           surge_multiplier: surgeMultiplier
         },
         { headers: { Authorization: `Bearer ${token}` } }
@@ -248,6 +265,8 @@ export default function RideBookingForm({ user, onBooking }) {
     setRideStatus('requested');
     setEta(null);
     setMatchingDrivers([]);
+    setFareEstimate(null);
+    setSurgeMultiplier(1.0);
   };
 
   return (
@@ -280,8 +299,12 @@ export default function RideBookingForm({ user, onBooking }) {
             <div className="location-card">
               <h3>Pickup Location</h3>
               <MapPicker 
+                key="pickup-map" // Add unique key
                 label="Select Pickup Location" 
-                onLocationSelect={setPickup} 
+                onLocationSelect={(location) => {
+                  console.log('Pickup location selected:', location);
+                  setPickup(location);
+                }} 
                 autoGetUserLocation={true}
                 placeholder="Enter pickup address or use GPS"
               />
@@ -296,8 +319,12 @@ export default function RideBookingForm({ user, onBooking }) {
             <div className="location-card">
               <h3>Drop-off Location</h3>
               <MapPicker 
+                key="dropoff-map" // Add unique key
                 label="Select Drop-off Location" 
-                onLocationSelect={setDrop} 
+                onLocationSelect={(location) => {
+                  console.log('Drop-off location selected:', location);
+                  setDrop(location);
+                }} 
                 autoGetUserLocation={false}
                 placeholder="Enter destination address"
               />
@@ -354,7 +381,7 @@ export default function RideBookingForm({ user, onBooking }) {
                   </div>
                 </div>
                 <div className="vehicle-rate">
-                  ₹{vehicle.baseRate}/km
+                  ₹{vehicle.baseFare} + ₹{vehicle.baseRate}/km
                 </div>
               </div>
             ))}
@@ -394,11 +421,11 @@ export default function RideBookingForm({ user, onBooking }) {
                 <div className="trip-stats">
                   <div className="stat">
                     <span className="stat-label">Distance</span>
-                    <span className="stat-value">{fareEstimate.distance} km</span>
+                    <span className="stat-value">{parseFloat(fareEstimate.distance).toFixed(1)} km</span>
                   </div>
                   <div className="stat">
                     <span className="stat-label">Est. Time</span>
-                    <span className="stat-value">{fareEstimate.estimatedTime} min</span>
+                    <span className="stat-value">{fareEstimate.estimatedTime || Math.ceil(parseFloat(fareEstimate.distance) * 3)} min</span>
                   </div>
                   <div className="stat">
                     <span className="stat-label">Vehicle</span>
@@ -410,21 +437,27 @@ export default function RideBookingForm({ user, onBooking }) {
               <div className="fare-details">
                 <div className="fare-line">
                   <span>Base fare</span>
-                  <span>₹{fareEstimate.baseFare || 50}</span>
+                  <span>₹{fareEstimate.fareBreakdown?.baseFare || fareEstimate.baseFare || vehicleTypes.find(v => v.id === vehicleType)?.baseFare || 50}</span>
                 </div>
                 <div className="fare-line">
                   <span>Distance ({fareEstimate.distance} km × ₹{vehicleTypes.find(v => v.id === vehicleType)?.baseRate})</span>
-                  <span>₹{Math.round(fareEstimate.distance * (vehicleTypes.find(v => v.id === vehicleType)?.baseRate || 15))}</span>
+                  <span>₹{fareEstimate.fareBreakdown?.distanceFare || Math.round(parseFloat(fareEstimate.distance) * (vehicleTypes.find(v => v.id === vehicleType)?.baseRate || 15))}</span>
                 </div>
+                {fareEstimate.fareBreakdown?.timeFare && (
+                  <div className="fare-line">
+                    <span>Time ({fareEstimate.estimatedTime} min × ₹{vehicleTypes.find(v => v.id === vehicleType)?.baseRate === 15 ? 2 : vehicleTypes.find(v => v.id === vehicleType)?.baseRate === 20 ? 2.5 : 3})</span>
+                    <span>₹{fareEstimate.fareBreakdown.timeFare}</span>
+                  </div>
+                )}
                 {surgeMultiplier > 1.0 && (
                   <div className="fare-line surge">
-                    <span>Surge pricing (×{surgeMultiplier})</span>
-                    <span>+₹{Math.round((fareEstimate.estimatedFare * surgeMultiplier) - fareEstimate.estimatedFare)}</span>
+                    <span>Surge pricing (×{surgeMultiplier.toFixed(1)})</span>
+                    <span>+₹{fareEstimate.fareBreakdown?.surgeAmount || Math.round((fareEstimate.estimatedFare * surgeMultiplier) - fareEstimate.estimatedFare)}</span>
                   </div>
                 )}
                 <div className="fare-line total">
                   <span>Total</span>
-                  <span>₹{Math.round(fareEstimate.estimatedFare * surgeMultiplier)}</span>
+                  <span>₹{fareEstimate.estimatedFare}</span>
                 </div>
               </div>
             </div>
