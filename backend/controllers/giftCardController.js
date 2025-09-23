@@ -4,12 +4,12 @@ const crypto = require('crypto');
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
-    key_id: 'rzp_test_GtGhzAvU4dco7G',
-    key_secret: 'EA4x7CvuM2jBlGZ7qEnVFpJ6'
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET
 });
 
 // Initialize Stripe
-const stripe = require('stripe')('sk_test_51RwgnORuv0jgys93Tt9Ykvc38Xxws08944RXoiH8UA0h41GqpqBbn7T8rv3TQJkXF7SfTnvqPlX1NmdAXeIuwCrF006yy0kyRV');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // Create Razorpay order for gift card
 exports.createRazorpayGiftCardOrder = async (req, res) => {
@@ -46,7 +46,7 @@ exports.verifyRazorpayGiftCard = async (req, res) => {
         // Verify payment signature
         const body = razorpay_order_id + '|' + razorpay_payment_id;
         const expectedSignature = crypto
-            .createHmac('sha256', 'EA4x7CvuM2jBlGZ7qEnVFpJ6')
+            .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
             .update(body.toString())
             .digest('hex');
         
