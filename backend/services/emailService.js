@@ -4,25 +4,41 @@ const logger = require('../utils/logger');
 class EmailService {
     constructor() {
         this.transporter = nodemailer.createTransport({
-            service: 'gmail',
+            host: 'smtp.gmail.com',
+            port: 587,
+            secure: false,
             auth: {
                 user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS
+                pass: process.env.EMAIL_PASS?.replace(/\s/g, '')
+            },
+            tls: {
+                rejectUnauthorized: false
             }
         });
     }
 
     async sendMarketingEmail(to, subject, content) {
         try {
-            await this.transporter.sendMail({
+            console.log('=== EMAIL SERVICE SEND ===');
+            console.log('To:', to);
+            console.log('Subject:', subject);
+            console.log('From:', process.env.EMAIL_USER);
+            console.log('Transporter configured:', !!this.transporter);
+            
+            const result = await this.transporter.sendMail({
                 from: process.env.EMAIL_USER,
                 to,
                 subject,
                 html: content
             });
+            
+            console.log('✅ Email sent successfully:', result.messageId);
             return true;
         } catch (error) {
-            console.error('Email send failed:', error);
+            console.error('❌ Email send failed:', error.message);
+            console.error('Error code:', error.code);
+            console.error('Error response:', error.response);
+            console.error('Full error:', error);
             return false;
         }
     }

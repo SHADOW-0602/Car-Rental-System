@@ -59,8 +59,8 @@ export default function RideBookingForm({ user, onBooking }) {
   // Payment methods
   const paymentMethods = [
     { id: 'cash', name: 'Cash', icon: '💵' },
-    { id: 'razorpay', name: 'UPI/Card', icon: '💳' },
-    { id: 'stripe', name: 'International Cards', icon: '🌍' },
+    { id: 'razorpay', name: 'Razorpay', icon: '💳' },
+    { id: 'stripe', name: 'Stripe', icon: '🌍' },
     { id: 'paypal', name: 'PayPal', icon: '🅿️' }
   ];
 
@@ -113,6 +113,17 @@ export default function RideBookingForm({ user, onBooking }) {
       alert('Please select both pickup and drop locations.');
       return;
     }
+    
+    // Check if pickup and drop are different (compare coordinates and address)
+    const sameCoordinates = Math.abs(pickup.latitude - drop.latitude) < 0.001 && 
+                           Math.abs(pickup.longitude - drop.longitude) < 0.001;
+    const sameAddress = pickup.address === drop.address;
+    
+    if (sameCoordinates || sameAddress) {
+      alert('Pickup and drop locations cannot be the same. Please select different locations.');
+      return;
+    }
+    
     setCurrentStep(2);
   };
 
@@ -131,6 +142,19 @@ export default function RideBookingForm({ user, onBooking }) {
       alert('Please select a payment method.');
       return;
     }
+    
+    // Check if pickup and drop are different (compare coordinates and address)
+    if (pickup && drop) {
+      const sameCoordinates = Math.abs(pickup.latitude - drop.latitude) < 0.001 && 
+                             Math.abs(pickup.longitude - drop.longitude) < 0.001;
+      const sameAddress = pickup.address === drop.address;
+      
+      if (sameCoordinates || sameAddress) {
+        alert('Pickup and drop locations cannot be the same. Please select different locations.');
+        return;
+      }
+    }
+    
     setCurrentStep(4);
     await findAndMatchDrivers();
   };
@@ -157,7 +181,7 @@ export default function RideBookingForm({ user, onBooking }) {
         return;
       }
       
-      // Just request ride without preferred driver - let drivers accept
+      // Request ride with payment processing for non-cash methods
       await requestRide(null);
       
     } catch (err) {
@@ -172,6 +196,13 @@ export default function RideBookingForm({ user, onBooking }) {
   const requestRide = async (driverId = null) => {
     try {
       const token = localStorage.getItem('token');
+      
+      // For non-cash payments, initiate payment first
+      if (paymentMethod !== 'cash') {
+        await initiatePayment();
+        return;
+      }
+      
       const res = await axios.post(
         `${config.API_BASE_URL}/rides/request`,
         { 
@@ -206,6 +237,161 @@ export default function RideBookingForm({ user, onBooking }) {
     }
   };
 
+  // Initiate payment for ride
+  const initiatePayment = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Create temporary ride first
+      const rideRes = await axios.post(
+        `${config.API_BASE_URL}/rides/request`,
+        { 
+          pickup_location: pickup, 
+          drop_location: drop, 
+          vehicle_type: vehicleType,
+          payment_method: paymentMethod,
+          surge_multiplier: surgeMultiplier,
+          status: 'payment_pending'
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      const ride = rideRes.data.ride;
+      
+      // Initiate payment
+      const paymentRes = await axios.post(
+        `${config.API_BASE_URL}/payments/initiate`,
+        {
+          rideId: ride._id,
+          paymentMethod,
+          amount: fareEstimate.estimatedFare
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      if (paymentRes.data.success) {
+        await processPayment(paymentRes.data, ride._id);
+      } else {
+        throw new Error(paymentRes.data.error);
+      }
+    } catch (err) {
+      console.error('Payment initiation failed:', err);
+      alert(err?.response?.data?.error || 'Payment failed');
+      setCurrentStep(3);
+    }
+  };
+
+  // Process payment based on gateway
+  const processPayment = async (paymentData, rideId) => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (paymentMethod === 'razorpay') {
+        const options = {
+          key: paymentData.gateway_response.key_id,
+          amount: paymentData.gateway_response.amount,
+          currency: paymentData.gateway_response.currency,
+          order_id: paymentData.gateway_response.order_id,
+          name: 'Car Rental System',
+          description: 'Ride Payment',
+          handler: async (response) => {
+            await verifyPayment(paymentData.payment_id, {
+              gateway_payment_id: response.razorpay_payment_id,
+              signature: response.razorpay_signature
+            }, rideId);
+          },
+          modal: {
+            ondismiss: () => {
+              alert('Payment cancelled');
+              setCurrentStep(3);
+            }
+          }
+        };
+        
+        const rzp = new window.Razorpay(options);
+        rzp.open();
+        
+      } else if (paymentMethod === 'stripe') {
+        // Stripe Checkout redirect
+        const stripe = window.Stripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
+        
+        const { error } = await stripe.redirectToCheckout({
+          sessionId: paymentData.gateway_response.session_id
+        });
+        
+        if (error) {
+          throw new Error(error.message);
+        }
+        
+      } else if (paymentMethod === 'paypal') {
+        // PayPal payment handling - open in popup
+        const popup = window.open(
+          paymentData.gateway_response.approval_url,
+          'paypal-payment',
+          'width=600,height=700,scrollbars=yes,resizable=yes'
+        );
+        
+        // Monitor popup for completion
+        const checkClosed = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(checkClosed);
+            // Check payment status
+            setTimeout(() => {
+              verifyPayment(paymentData.payment_id, {}, rideId);
+            }, 1000);
+          }
+        }, 1000);
+      }
+    } catch (err) {
+      console.error('Payment processing failed:', err);
+      alert('Payment failed: ' + err.message);
+      setCurrentStep(3);
+    }
+  };
+
+  // Verify payment and complete ride booking
+  const verifyPayment = async (paymentId, paymentDetails, rideId) => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      const res = await axios.post(
+        `${config.API_BASE_URL}/payments/verify/${paymentId}`,
+        paymentDetails,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      if (res.data.success) {
+        // Update ride status to requested
+        await axios.put(
+          `${config.API_BASE_URL}/rides/${rideId}/status`,
+          { status: 'requested' },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        // Get updated ride data
+        const rideRes = await axios.get(
+          `${config.API_BASE_URL}/rides/${rideId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        setRide(rideRes.data.ride);
+        setRideStatus('requested');
+        setCurrentStep(5);
+        
+        if (onBooking) onBooking(rideRes.data);
+        monitorRideStatus(rideId);
+        
+        alert('Payment successful! Looking for drivers...');
+      } else {
+        throw new Error(res.data.message || 'Payment verification failed');
+      }
+    } catch (err) {
+      console.error('Payment verification failed:', err);
+      alert('Payment verification failed: ' + err.message);
+      setCurrentStep(3);
+    }
+  };
+
   // Monitor ride status for real-time updates
   const monitorRideStatus = (rideId) => {
     const interval = setInterval(async () => {
@@ -217,19 +403,24 @@ export default function RideBookingForm({ user, onBooking }) {
         );
         
         const rideData = res.data.ride;
+        console.log('Ride status update:', rideData.status, rideData);
+        
+        // Update ride data completely
+        setRide(rideData);
         setRideStatus(rideData.status);
         
         if (rideData.status === 'accepted') {
-          setEta(rideData.eta);
+          setEta(rideData.driver_info?.eta || rideData.eta);
+          console.log('Driver accepted! Driver info:', rideData.driver_info);
         } else if (rideData.status === 'in_progress') {
-          setEta(rideData.eta);
+          setEta(rideData.driver_info?.eta || rideData.eta);
         } else if (rideData.status === 'completed' || rideData.status === 'cancelled') {
           clearInterval(interval);
         }
       } catch (err) {
         console.error('Status monitoring failed:', err);
       }
-    }, 5000); // Check every 5 seconds
+    }, 3000); // Check every 3 seconds for faster updates
   };
 
   // Cancel ride
@@ -303,6 +494,7 @@ export default function RideBookingForm({ user, onBooking }) {
                 label="Select Pickup Location" 
                 onLocationSelect={(location) => {
                   console.log('Pickup location selected:', location);
+                  console.log('Current drop location:', drop);
                   setPickup(location);
                 }} 
                 autoGetUserLocation={true}
@@ -323,6 +515,7 @@ export default function RideBookingForm({ user, onBooking }) {
                 label="Select Drop-off Location" 
                 onLocationSelect={(location) => {
                   console.log('Drop-off location selected:', location);
+                  console.log('Current pickup location:', pickup);
                   setDrop(location);
                 }} 
                 autoGetUserLocation={false}
@@ -404,99 +597,205 @@ export default function RideBookingForm({ user, onBooking }) {
           <h2>💰 Review your trip</h2>
           
           {fareEstimate && (
-            <div className="fare-breakdown">
-              <div className="trip-details">
-                <div className="trip-route">
-                  <div className="route-point pickup">
-                    <span className="point-icon">📍</span>
-                    <span>{pickup.address}</span>
+            <div style={{ marginBottom: '30px' }}>
+              {/* Trip Route - Uber Style */}
+              <div style={{
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                padding: '20px',
+                marginBottom: '20px',
+                border: '1px solid #e5e7eb',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginRight: '15px' }}>
+                    <div style={{ width: '12px', height: '12px', backgroundColor: '#10b981', borderRadius: '50%', marginBottom: '8px' }}></div>
+                    <div style={{ width: '2px', height: '40px', backgroundColor: '#d1d5db', borderRadius: '1px' }}></div>
+                    <div style={{ width: '12px', height: '12px', backgroundColor: '#ef4444', borderRadius: '50%', marginTop: '8px' }}></div>
                   </div>
-                  <div className="route-line"></div>
-                  <div className="route-point dropoff">
-                    <span className="point-icon">🎯</span>
-                    <span>{drop.address}</span>
-                  </div>
-                </div>
-                
-                <div className="trip-stats">
-                  <div className="stat">
-                    <span className="stat-label">Distance</span>
-                    <span className="stat-value">{parseFloat(fareEstimate.distance).toFixed(1)} km</span>
-                  </div>
-                  <div className="stat">
-                    <span className="stat-label">Est. Time</span>
-                    <span className="stat-value">{fareEstimate.estimatedTime || Math.ceil(parseFloat(fareEstimate.distance) * 3)} min</span>
-                  </div>
-                  <div className="stat">
-                    <span className="stat-label">Vehicle</span>
-                    <span className="stat-value">{vehicleTypes.find(v => v.id === vehicleType)?.name}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ marginBottom: '20px' }}>
+                      <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '4px' }}>From</div>
+                      <div style={{ fontSize: '16px', color: '#111827', fontWeight: '500' }}>
+                        {pickup?.address?.split(',').slice(0, 2).join(', ') || 'Pickup location'}
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#9ca3af' }}>
+                        {pickup?.address?.split(',').slice(2, 4).join(', ') || ''}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '4px' }}>To</div>
+                      <div style={{ fontSize: '16px', color: '#111827', fontWeight: '500' }}>
+                        {drop?.address?.split(',').slice(0, 2).join(', ') || 'Drop location'}
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#9ca3af' }}>
+                        {drop?.address?.split(',').slice(2, 4).join(', ') || ''}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="fare-details">
-                <div className="fare-line">
-                  <span>Base fare</span>
-                  <span>₹{fareEstimate.fareBreakdown?.baseFare || fareEstimate.baseFare || vehicleTypes.find(v => v.id === vehicleType)?.baseFare || 50}</span>
+              {/* Trip Stats */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                padding: '20px',
+                marginBottom: '20px',
+                border: '1px solid #e5e7eb',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+              }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '20px', fontWeight: '600', color: '#111827' }}>
+                    {parseFloat(fareEstimate.distance).toFixed(1)} km
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>Distance</div>
                 </div>
-                <div className="fare-line">
-                  <span>Distance ({fareEstimate.distance} km × ₹{vehicleTypes.find(v => v.id === vehicleType)?.baseRate})</span>
-                  <span>₹{fareEstimate.fareBreakdown?.distanceFare || Math.round(parseFloat(fareEstimate.distance) * (vehicleTypes.find(v => v.id === vehicleType)?.baseRate || 15))}</span>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '20px', fontWeight: '600', color: '#111827' }}>
+                    {fareEstimate.estimatedTime || Math.ceil(parseFloat(fareEstimate.distance) * 3)} min
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>Time</div>
                 </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '24px' }}>
+                    {vehicleTypes.find(v => v.id === vehicleType)?.icon}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                    {vehicleTypes.find(v => v.id === vehicleType)?.name}
+                  </div>
+                </div>
+              </div>
+
+              {/* Fare Breakdown */}
+              <div style={{
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                padding: '20px',
+                border: '1px solid #e5e7eb',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+              }}>
+                <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '15px', color: '#111827' }}>
+                  Price details
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: '15px' }}>
+                  <span style={{ color: '#6b7280' }}>Base fare</span>
+                  <span style={{ color: '#111827', fontWeight: '500' }}>₹{fareEstimate.fareBreakdown?.baseFare || fareEstimate.baseFare || vehicleTypes.find(v => v.id === vehicleType)?.baseFare || 50}</span>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: '15px' }}>
+                  <span style={{ color: '#6b7280' }}>Distance ({fareEstimate.distance} km)</span>
+                  <span style={{ color: '#111827', fontWeight: '500' }}>₹{fareEstimate.fareBreakdown?.distanceFare || Math.round(parseFloat(fareEstimate.distance) * (vehicleTypes.find(v => v.id === vehicleType)?.baseRate || 15))}</span>
+                </div>
+                
                 {fareEstimate.fareBreakdown?.timeFare && (
-                  <div className="fare-line">
-                    <span>Time ({fareEstimate.estimatedTime} min × ₹{vehicleTypes.find(v => v.id === vehicleType)?.baseRate === 15 ? 2 : vehicleTypes.find(v => v.id === vehicleType)?.baseRate === 20 ? 2.5 : 3})</span>
-                    <span>₹{fareEstimate.fareBreakdown.timeFare}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: '15px' }}>
+                    <span style={{ color: '#6b7280' }}>Time ({fareEstimate.estimatedTime} min)</span>
+                    <span style={{ color: '#111827', fontWeight: '500' }}>₹{fareEstimate.fareBreakdown.timeFare}</span>
                   </div>
                 )}
+                
                 {surgeMultiplier > 1.0 && (
-                  <div className="fare-line surge">
-                    <span>Surge pricing (×{surgeMultiplier.toFixed(1)})</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontSize: '15px', color: '#f59e0b' }}>
+                    <span>Surge (×{surgeMultiplier.toFixed(1)})</span>
                     <span>+₹{fareEstimate.fareBreakdown?.surgeAmount || Math.round((fareEstimate.estimatedFare * surgeMultiplier) - fareEstimate.estimatedFare)}</span>
                   </div>
                 )}
-                <div className="fare-line total">
-                  <span>Total</span>
-                  <span>₹{fareEstimate.estimatedFare}</span>
+                
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  padding: '15px 0 8px 0',
+                  fontSize: '18px',
+                  fontWeight: '700',
+                  borderTop: '1px solid #f3f4f6',
+                  marginTop: '10px'
+                }}>
+                  <span style={{ color: '#111827' }}>Total</span>
+                  <span style={{ color: '#111827' }}>₹{fareEstimate.estimatedFare}</span>
                 </div>
               </div>
             </div>
           )}
 
-          <div className="payment-section">
-            <h3>💳 Payment Method</h3>
-            <div className="payment-methods">
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '20px',
+            border: '1px solid #e5e7eb',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+          }}>
+            <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '15px', color: '#111827' }}>
+              Payment method
+            </div>
+            <div style={{ display: 'grid', gap: '10px' }}>
             {paymentMethods.map((method) => (
               <div
                 key={method.id}
-                className={`payment-method ${paymentMethod === method.id ? 'selected' : ''}`}
-                onClick={() => setPaymentMethod(method.id)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setPaymentMethod(method.id);
-                  }
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '15px',
+                  borderRadius: '8px',
+                  border: paymentMethod === method.id ? '2px solid #3b82f6' : '1px solid #d1d5db',
+                  backgroundColor: paymentMethod === method.id ? '#eff6ff' : 'white',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
                 }}
-                role="button"
-                tabIndex={0}
+                onClick={() => setPaymentMethod(method.id)}
               >
-                  <span className="payment-icon">{method.icon}</span>
-                  <span className="payment-name">{method.name}</span>
+                <span style={{ fontSize: '20px', marginRight: '12px' }}>{method.icon}</span>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: '16px', color: '#111827', fontWeight: '500' }}>{method.name}</span>
+                  {method.id !== 'cash' && (
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>Pay now to confirm booking</div>
+                  )}
                 </div>
-              ))}
+                {paymentMethod === method.id && (
+                  <span style={{ marginLeft: 'auto', color: '#3b82f6', fontSize: '18px' }}>✓</span>
+                )}
+              </div>
+            ))}
             </div>
           </div>
 
-          <div className="step-actions">
-            <button className="btn-secondary" onClick={() => setCurrentStep(2)}>
+          <div style={{ display: 'flex', gap: '15px' }}>
+            <button 
+              onClick={() => setCurrentStep(2)}
+              style={{
+                flex: 1,
+                padding: '16px',
+                backgroundColor: 'white',
+                color: '#6b7280',
+                border: '1px solid #d1d5db',
+                borderRadius: '8px',
+                fontSize: '16px',
+                fontWeight: '500',
+                cursor: 'pointer'
+              }}
+            >
               ← Back
             </button>
             <button 
-              className="btn-primary"
               onClick={handleFareSubmit}
               disabled={!paymentMethod}
+              style={{
+                flex: 2,
+                padding: '16px',
+                backgroundColor: !paymentMethod ? '#9ca3af' : '#111827',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '16px',
+                fontWeight: '600',
+                cursor: !paymentMethod ? 'not-allowed' : 'pointer'
+              }}
             >
-              Request Ride →
+              {paymentMethod === 'cash' ? 'Request' : 'Pay & Request'} {vehicleTypes.find(v => v.id === vehicleType)?.name}
             </button>
           </div>
         </div>
@@ -541,6 +840,7 @@ export default function RideBookingForm({ user, onBooking }) {
           
           <div className="ride-status">
             <div className="status-indicator">
+              {rideStatus === 'searching' && <span className="status-icon">🔍</span>}
               {rideStatus === 'requested' && <span className="status-icon">⏳</span>}
               {rideStatus === 'accepted' && <span className="status-icon">✅</span>}
               {rideStatus === 'in_progress' && <span className="status-icon">🚗</span>}
@@ -549,6 +849,7 @@ export default function RideBookingForm({ user, onBooking }) {
             </div>
             
             <div className="status-text">
+              {rideStatus === 'searching' && 'Searching for available drivers...'}
               {rideStatus === 'requested' && 'Waiting for driver to accept...'}
               {rideStatus === 'accepted' && 'Driver accepted! They\'re on the way.'}
               {rideStatus === 'in_progress' && 'Trip in progress'}
@@ -557,21 +858,31 @@ export default function RideBookingForm({ user, onBooking }) {
             </div>
           </div>
 
-          {ride.driver_id && (
+          {(ride.driver_id || ride.driver_info) && rideStatus !== 'searching' && (
             <div className="driver-info">
               <h3>Your Driver</h3>
               <div className="driver-card">
                 <div className="driver-avatar">
-                  {ride.driver_id.name?.charAt(0) || 'D'}
+                  {(ride.driver_info?.name || ride.driver_id?.name || 'Driver').charAt(0)}
                 </div>
                 <div className="driver-details">
-                  <div className="driver-name">{ride.driver_id.name || 'Driver'}</div>
+                  <div className="driver-name">{ride.driver_info?.name || ride.driver_id?.name || 'Driver'}</div>
                   <div className="driver-rating">
-                    ⭐ {ride.driver_id.rating || '4.5'}
+                    ⭐ {ride.driver_info?.rating || ride.driver_id?.rating || '4.5'}
                   </div>
                   <div className="driver-vehicle">
-                    {vehicleTypes.find(v => v.id === vehicleType)?.icon} {vehicleTypes.find(v => v.id === vehicleType)?.name}
+                    {vehicleTypes.find(v => v.id === vehicleType)?.icon} {ride.driver_info?.vehicle_model || vehicleTypes.find(v => v.id === vehicleType)?.name}
                   </div>
+                  {ride.driver_info?.vehicle_number && (
+                    <div className="driver-plate">
+                      🚗 {ride.driver_info.vehicle_number}
+                    </div>
+                  )}
+                  {ride.driver_info?.distance_from_user && (
+                    <div className="driver-distance">
+                      📍 {ride.driver_info.distance_from_user} km away
+                    </div>
+                  )}
                 </div>
                 <div className="driver-actions">
                   <button className="btn-icon">📞</button>
@@ -581,9 +892,9 @@ export default function RideBookingForm({ user, onBooking }) {
             </div>
           )}
 
-          {eta && (
+          {(eta || ride.driver_info?.eta) && rideStatus !== 'searching' && (
             <div className="eta-info">
-              <div className="eta-time">{eta} minutes</div>
+              <div className="eta-time">{eta || ride.driver_info?.eta} minutes</div>
               <div className="eta-label">Estimated arrival</div>
             </div>
           )}

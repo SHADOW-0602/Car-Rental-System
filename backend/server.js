@@ -774,6 +774,16 @@ app.use('/api/support', supportRoutes);
 app.use('/api/security', securityRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/setup', setupRoutes);
+app.use('/api/gift-cards', require('./routes/giftCardRoutes'));
+
+// Gift card routes
+try {
+  const giftCardRoutes = require('./routes/giftCardRoutes');
+  app.use('/api/gift-cards', giftCardRoutes);
+  console.log('✅ Gift card routes loaded');
+} catch (error) {
+  console.error('❌ Gift card routes error:', error.message);
+}
 
 // Middleware to update driver lastActive timestamp
 app.use(['/api/drivers/*', '/api/rides/*'], auth, async (req, res, next) => {

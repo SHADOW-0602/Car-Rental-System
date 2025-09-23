@@ -4108,3 +4108,17 @@ body {
     margin: 0 8px 8px 8px;
   }
 }
+/* Driver information styles */
+.driver-plate {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-top: 3px;
+}
+
+.driver-distance {
+  color: var(--info-color);
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-top: 3px;
+}

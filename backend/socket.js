@@ -38,7 +38,8 @@ function initSocket(server) {
             }
 
             if (!user) {
-                console.log('Socket auth: User not found for ID:', decoded.id);
+                console.log('Socket auth: User not found for ID:', decoded.id, 'Role:', decoded.role);
+                // Clear the invalid session and allow anonymous connection
                 socket.user = null;
                 return next();
             }

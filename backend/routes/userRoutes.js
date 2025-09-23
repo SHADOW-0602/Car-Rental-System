@@ -30,6 +30,19 @@ const uploadFields = upload.fields([
 router.post('/register', userController.register);
 router.post('/login', checkAccountLock, userController.login);
 
+// Token validation for socket connections
+router.get('/validate-token', auth, (req, res) => {
+  res.json({ valid: true, user: { id: req.user.id, name: req.user.name } });
+});
+
+// Cleanup invalid session
+router.post('/cleanup-session', (req, res) => {
+  res.clearCookie('auth_user');
+  res.clearCookie('auth_driver');
+  res.clearCookie('auth_admin');
+  res.json({ success: true, message: 'Session cleared' });
+});
+
 // Protected: Profile info and update (with activity tracking)
 router.get('/profile', auth, validateAccountStatus, trackUserActivity, userController.getProfile);
 router.put('/profile', auth, validateAccountStatus, trackUserActivity, userController.updateProfile);

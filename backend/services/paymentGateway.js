@@ -67,21 +67,45 @@ class PaymentGateway {
     }
 
     // Stripe Integration
-    async createStripePaymentIntent(amount, currency = 'inr', metadata = {}) {
+    async createStripeCheckoutSession(amount, currency = 'usd', metadata = {}) {
         try {
-            const paymentIntent = await this.stripe.paymentIntents.create({
-                amount: amount * 100, // Convert to smallest currency unit
-                currency,
-                metadata,
-                automatic_payment_methods: {
-                    enabled: true
-                }
+            const session = await this.stripe.checkout.sessions.create({
+                payment_method_types: ['card'],
+                line_items: [{
+                    price_data: {
+                        currency,
+                        product_data: {
+                            name: 'Ride Payment',
+                            description: 'Car rental ride payment'
+                        },
+                        unit_amount: Math.round(amount * 100)
+                    },
+                    quantity: 1
+                }],
+                mode: 'payment',
+                success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+                cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment-cancel`,
+                metadata
             });
 
             return {
                 success: true,
-                client_secret: paymentIntent.client_secret,
-                payment_intent_id: paymentIntent.id
+                session_id: session.id
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+
+    async confirmStripeSession(sessionId) {
+        try {
+            const session = await this.stripe.checkout.sessions.retrieve(sessionId);
+            return {
+                success: session.payment_status === 'paid',
+                status: session.payment_status
             };
         } catch (error) {
             return {

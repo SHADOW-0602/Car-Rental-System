@@ -434,8 +434,7 @@ export default function AdminPortal() {
                         { id: 'users', label: '👥 Users', count: users.length },
                         { id: 'verification', label: '📋 Verifications', count: verificationRequests.length, alert: verificationRequests.length > 0 },
                         { id: 'complaints', label: '📞 Support', count: complaints.filter(c => c.status !== 'resolved').length },
-                        { id: 'contact', label: '📧 Messages', count: contactMessages.filter(m => !m.reply).length },
-                        { id: 'analytics', label: '📈 System Analytics' }
+                        { id: 'contact', label: '📧 Messages', count: contactMessages.filter(m => !m.reply).length }
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -1298,8 +1297,8 @@ export default function AdminPortal() {
                                                         Trip #{trip._id.slice(-6).toUpperCase()}
                                                     </h3>
                                                     <div style={{ display: 'flex', gap: '15px', fontSize: '14px', color: '#64748b' }}>
-                                                        <span>👤 {trip.user_id?.name || 'Unknown User'}</span>
-                                                        <span>🚕 {trip.driver_id?.name || 'Unknown Driver'}</span>
+                                                        <span>👤 {trip.user_id?.name || trip.userName || 'Unknown User'}</span>
+                                                        <span>🚕 {trip.driver_id?.name || trip.driverName || 'Unknown Driver'}</span>
                                                         <span>🚗 {trip.vehicle_type?.toUpperCase()}</span>
                                                     </div>
                                                 </div>
@@ -1369,26 +1368,11 @@ export default function AdminPortal() {
                                                 <div>
                                                     <div style={{ fontSize: '12px', color: '#64748b' }}>Driver</div>
                                                     <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>
-                                                        {trip.driver_id?.name || 'Unknown'}
+                                                        {trip.driver_id?.name || trip.driverName || 'Unknown'}
                                                     </div>
                                                 </div>
                                             </div>
                                             <div style={{ display: 'flex', gap: '8px' }}>
-                                                <button
-                                                    onClick={() => window.open(`/track-ride/${trip._id}?admin=true`, '_blank')}
-                                                    style={{
-                                                        padding: '8px 16px',
-                                                        backgroundColor: '#667eea',
-                                                        color: 'white',
-                                                        border: 'none',
-                                                        borderRadius: '6px',
-                                                        cursor: 'pointer',
-                                                        fontSize: '12px',
-                                                        fontWeight: '600'
-                                                    }}
-                                                >
-                                                    🗺️ Track
-                                                </button>
                                                 {trip.user_id?.phone && (
                                                     <button
                                                         onClick={() => window.open(`tel:${trip.user_id.phone}`)}
@@ -1438,11 +1422,7 @@ export default function AdminPortal() {
                     </div>
                 )}
 
-                {activeTab === 'analytics' && (
-                    <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '15px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
-                        <AdminAnalytics />
-                    </div>
-                )}
+
 
                 {showDriverModal && selectedDriver && (
                     <div style={{

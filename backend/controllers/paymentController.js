@@ -9,33 +9,42 @@ const paymentGateway = new PaymentGateway();
 // Initiate payment for a ride
 exports.initiatePayment = async (req, res) => {
     try {
-        const { rideId, paymentMethod, amount } = req.body;
+        const { rideId, paymentMethod, amount, pickup_location, drop_location, vehicle_type, surge_multiplier } = req.body;
         console.log('Payment initiation request:', { rideId, paymentMethod, amount, userId: req.user.id });
 
-        // Verify ride exists and belongs to user
-        const ride = await Ride.findById(rideId).populate('user_id', 'name email phone');
-        console.log('Found ride:', ride ? { id: ride._id, status: ride.status, userId: ride.user_id?._id } : 'null');
+        let ride;
         
-        if (!ride) {
-            return res.status(404).json({
-                success: false,
-                error: 'Ride not found'
+        if (rideId) {
+            // Verify existing ride
+            ride = await Ride.findById(rideId).populate('user_id', 'name email phone');
+            
+            if (!ride) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Ride not found'
+                });
+            }
+            
+            if (ride.user_id._id.toString() !== req.user.id) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Unauthorized access to this ride'
+                });
+            }
+        } else {
+            // Create new ride for payment
+            ride = new Ride({
+                user_id: req.user.id,
+                pickup_location,
+                drop_location,
+                vehicle_type,
+                payment_method: paymentMethod,
+                surge_multiplier: surge_multiplier || 1.0,
+                status: 'payment_pending',
+                fare: amount
             });
-        }
-        
-        if (ride.user_id._id.toString() !== req.user.id) {
-            return res.status(403).json({
-                success: false,
-                error: 'Unauthorized access to this ride'
-            });
-        }
-
-        if (ride.status !== 'completed') {
-            return res.status(400).json({
-                success: false,
-                error: 'Payment can only be made for completed rides',
-                rideStatus: ride.status
-            });
+            
+            await ride.save();
         }
 
         // Check if payment already exists
@@ -60,7 +69,7 @@ exports.initiatePayment = async (req, res) => {
                 gatewayResponse = await paymentGateway.createRazorpayOrder(amount, 'INR', receipt);
                 break;
             case 'stripe':
-                gatewayResponse = await paymentGateway.createStripePaymentIntent(amount, 'inr', {
+                gatewayResponse = await paymentGateway.createStripeCheckoutSession(amount, 'usd', {
                     ride_id: rideId,
                     user_id: req.user.id
                 });
@@ -89,7 +98,8 @@ exports.initiatePayment = async (req, res) => {
             amount,
             payment_method: paymentMethod,
             gateway_details: {
-                order_id: gatewayResponse.order_id || gatewayResponse.payment_intent_id,
+                order_id: gatewayResponse.order_id || gatewayResponse.session_id,
+                session_id: gatewayResponse.session_id,
                 gateway_response: gatewayResponse
             },
             status: 'processing',
@@ -104,6 +114,7 @@ exports.initiatePayment = async (req, res) => {
         res.json({
             success: true,
             payment_id: payment._id,
+            ride_id: ride._id,
             gateway_response: gatewayResponse
         });
     } catch (err) {
@@ -143,9 +154,12 @@ exports.verifyPayment = async (req, res) => {
                 break;
 
             case 'stripe':
-                verificationResult = await paymentGateway.confirmStripePayment(
-                    payment.gateway_details.order_id
+                verificationResult = await paymentGateway.confirmStripeSession(
+                    payment.gateway_details.session_id || payment.gateway_details.order_id
                 );
+                if (verificationResult.success) {
+                    payment.gateway_details.session_id = gateway_payment_id;
+                }
                 break;
 
             case 'paypal':

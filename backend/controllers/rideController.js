@@ -25,7 +25,9 @@ async function getDriverCurrentLocation(driverId) {
 
 exports.requestRide = async (req, res) => {
     try {
+        console.log('=== RIDE REQUEST START ===');
         const { pickup_location, drop_location, vehicle_type, payment_method, preferred_driver_id, surge_multiplier } = req.body;
+        console.log('Request data:', { pickup_location, drop_location, vehicle_type, payment_method });
         
         // Check for existing active ride
         const existingRide = await Ride.findOne({
@@ -57,13 +59,12 @@ exports.requestRide = async (req, res) => {
             });
         }
         
-        // Calculate distance and fare with surge pricing
+        // Store initial estimate for reference
         const distance = calculateDistance(
             pickup_location.latitude, pickup_location.longitude,
             drop_location.latitude, drop_location.longitude
         );
         
-        // Vehicle type rates
         const vehicleRates = {
             economy: { baseFare: 50, perKm: 15, perMin: 2 },
             sedan: { baseFare: 70, perKm: 20, perMin: 2.5 },
@@ -72,41 +73,36 @@ exports.requestRide = async (req, res) => {
         
         const rates = vehicleRates[vehicle_type] || vehicleRates.economy;
         const estimatedTime = Math.round(distance * 2);
-        
-        // Calculate base fare
         const baseFare = rates.baseFare;
+        const surgeMultiplierValue = surge_multiplier || await calculateSurgePricing(pickup_location, vehicle_type);
+        
+        // Calculate fare components
         const distanceFare = distance * rates.perKm;
         const timeFare = estimatedTime * rates.perMin;
-        const baseEstimatedFare = Math.round(baseFare + distanceFare + timeFare);
+        const baseEstimatedFare = baseFare + distanceFare + timeFare;
+        const estimatedFare = Math.round(baseEstimatedFare * surgeMultiplierValue);
         
-        // Apply surge pricing
-        const surgeMultiplierValue = surge_multiplier || await calculateSurgePricing(pickup_location, vehicle_type);
-        const fare = Math.round(baseEstimatedFare * surgeMultiplierValue);
-        
-        // Find nearby available drivers with enhanced matching
+        // Check for available drivers but don't assign yet
         const nearbyDrivers = await findNearbyDriversWithMatching(pickup_location, vehicle_type, req.user.id);
-        
-        // Create ride request even if no drivers are immediately available
-        // This allows for real-time driver matching as drivers come online
 
-        // Create ride request
+        // Create ride request with 'searching' status
         const rideData = {
             user_id: req.user.id,
             pickup_location,
             drop_location,
             distance,
-            fare,
+            estimatedFare,
             baseFare,
             surgeMultiplier: surgeMultiplierValue,
             vehicle_type: vehicle_type || 'economy',
             payment_method,
-            status: 'requested',
+            status: 'searching',
             estimatedTime,
             fareBreakdown: {
                 baseFare,
                 distanceFare: Math.round(distanceFare),
                 timeFare: Math.round(timeFare),
-                surgeAmount: Math.round((fare - baseEstimatedFare))
+                surgeAmount: Math.round(estimatedFare - baseEstimatedFare)
             }
         };
         
@@ -117,10 +113,10 @@ exports.requestRide = async (req, res) => {
         
         const ride = await Ride.create(rideData);
 
-        // Send notifications to drivers
+        // Broadcast to available drivers immediately
         const io = req.app.get('io');
         if (io) {
-            // Notify admin about new ride request
+            // Notify admin
             io.emit('admin_notification', {
                 type: 'new_ride_request',
                 rideId: ride._id,
@@ -128,59 +124,30 @@ exports.requestRide = async (req, res) => {
                 user: req.user.name,
                 pickup: pickup_location.address,
                 destination: drop_location.address,
-                fare: fare,
+                estimatedFare: estimatedFare,
                 timestamp: new Date()
             });
             
-            if (preferred_driver_id) {
-                // Send to specific preferred driver
-                io.emit(`driver_notification_${preferred_driver_id}`, {
-                    type: 'ride_request',
-                    rideId: ride._id,
-                    message: `New ride request from ${req.user.name}`,
-                    pickup: pickup_location.address || `${pickup_location.latitude}, ${pickup_location.longitude}`,
-                    destination: drop_location.address || `${drop_location.latitude}, ${drop_location.longitude}`,
-                    fare: fare,
-                    distance: Math.round(distance * 100) / 100,
-                    vehicle_type,
-                    payment_method,
-                    isPreferred: true,
-                    timestamp: new Date()
-                });
-            } else if (nearbyDrivers.length > 0) {
-                // Send to nearby drivers only (within 10km radius)
-                nearbyDrivers.forEach(driver => {
-                    if (driver.distance <= 10) { // Only notify drivers within 10km
-                        io.emit(`driver_notification_${driver._id}`, {
-                            type: 'ride_request',
-                            rideId: ride._id,
-                            message: `New ride request from ${req.user.name}`,
-                            pickup: pickup_location.address || `${pickup_location.latitude}, ${pickup_location.longitude}`,
-                            destination: drop_location.address || `${drop_location.latitude}, ${drop_location.longitude}`,
-                            fare: fare,
-                            distance: Math.round(distance * 100) / 100,
-                            vehicle_type,
-                            payment_method,
-                            timestamp: new Date()
-                        });
-                    }
-                });
-            }
+            // Broadcast to matching drivers
+            broadcastToAvailableDrivers(ride._id, vehicle_type, pickup_location, drop_location, estimatedFare, io);
         }
 
+        console.log('=== RIDE REQUEST COMPLETE ===');
         res.json({ 
             success: true,
             hasActiveRide: false,
             ride,
-            estimatedFare: fare,
+            estimatedFare: estimatedFare,
             estimatedDistance: distance,
-            message: nearbyDrivers.length > 0 ? 
-                'Ride request sent to nearby drivers. Please wait for a driver to accept.' :
-                'Ride request created. Searching for available drivers in your area...',
+            message: `Searching for available ${vehicle_type} drivers. We'll notify you when a driver accepts.`,
             waitingForAccept: true,
-            availableDrivers: nearbyDrivers.length
+            requiresDriverAcceptance: true,
+            availableDrivers: nearbyDrivers.length,
+            vehicleTypeRequested: vehicle_type
         });
     } catch (err) {
+        console.error('❌ RIDE REQUEST ERROR:', err);
+        console.error('Error stack:', err.stack);
         res.status(400).json({ success: false, error: err.message });
     }
 };
@@ -494,7 +461,13 @@ exports.getTripStatus = async (req, res) => {
         
         res.json({
             success: true,
-            ride,
+            ride: {
+                ...ride.toObject(),
+                // Ensure driver_info is included in response
+                driver_info: ride.driver_info || null,
+                // Include populated driver data if available
+                driver_id: ride.driver_id || null
+            },
             tracking: trackingData,
             driverLocation,
             isTracking: ride.status === 'in_progress' && req.user.role === 'driver',
@@ -509,21 +482,45 @@ exports.getRideRequests = async (req, res) => {
     try {
         console.log('Getting ride requests for driver:', req.user.id);
         
+        // Get driver info to filter by vehicle type
+        const driver = await Driver.findById(req.user.id).select('driverInfo.vehicleType name');
+        if (!driver) {
+            return res.status(404).json({ success: false, error: 'Driver not found' });
+        }
+        
+        console.log('Driver vehicle type:', driver.driverInfo?.vehicleType);
+        
+        if (!driver.driverInfo?.vehicleType) {
+            console.log('Driver has no vehicle type set');
+            return res.json({ success: true, requests: [], message: 'Vehicle type not set in driver profile' });
+        }
+        
+        // First, let's see all searching rides
+        const allSearchingRides = await Ride.find({ status: 'searching' })
+            .select('_id vehicle_type status driver_id declined_by')
+            .sort({ createdAt: -1 });
+        
+        console.log('All searching rides:', allSearchingRides.length);
+        allSearchingRides.forEach(ride => {
+            console.log(`Ride ${ride._id}: vehicle_type=${ride.vehicle_type}, status=${ride.status}, driver_id=${ride.driver_id}`);
+        });
+        
         const requests = await Ride.find({ 
-            status: 'requested',
+            status: 'searching',
+            vehicle_type: driver.driverInfo.vehicleType,
             $or: [
                 { driver_id: { $exists: false } },
                 { driver_id: null }
             ],
-            declined_by: { $ne: req.user.id }
+            declined_by: { $nin: [req.user.id] }
         })
         .populate('user_id', 'name phone rating')
         .sort({ createdAt: -1 })
         .limit(20);
         
-        console.log('Found ride requests:', requests.length);
-        requests.forEach(req => {
-            console.log('Request ID:', req._id, 'Status:', req.status);
+        console.log(`Found ${requests.length} ride requests for vehicle type: ${driver.driverInfo.vehicleType}`);
+        requests.forEach(request => {
+            console.log(`Request ID: ${request._id}, Status: ${request.status}, Vehicle: ${request.vehicle_type}`);
         });
         
         res.json({ success: true, requests });
@@ -536,6 +533,7 @@ exports.getRideRequests = async (req, res) => {
 exports.acceptRideRequest = async (req, res) => {
     try {
         console.log('=== ACCEPT RIDE REQUEST ENDPOINT HIT ===');
+        console.log('Timestamp:', new Date().toISOString());
         console.log('Method:', req.method);
         console.log('URL:', req.url);
         console.log('Params:', req.params);
@@ -581,17 +579,17 @@ exports.acceptRideRequest = async (req, res) => {
             declined_by: ride.declined_by
         });
         
-        if (ride.status !== 'requested') {
+        if (ride.status !== 'searching') {
             console.log('❌ Ride status check failed:', {
                 rideId,
                 currentStatus: ride.status,
-                expectedStatus: 'requested',
+                expectedStatus: 'searching',
                 driverId,
                 declinedBy: ride.declined_by
             });
             return res.status(400).json({ 
                 success: false, 
-                error: `Ride status is '${ride.status}', expected 'requested'` 
+                error: `Ride status is '${ride.status}', expected 'searching'` 
             });
         }
         
@@ -698,19 +696,6 @@ exports.acceptRideRequest = async (req, res) => {
                 timestamp: new Date()
             });
             
-            // Also send specific notifications to remove from driver interfaces
-            const allDrivers = await User.find({ role: 'driver' }).select('_id');
-            allDrivers.forEach(driver => {
-                if (driver._id.toString() !== driverId) {
-                    io.emit(`driver_notification_${driver._id}`, {
-                        type: 'remove_ride_request',
-                        rideId: rideId,
-                        message: 'Ride no longer available',
-                        timestamp: new Date()
-                    });
-                }
-            });
-            
             // Start Uber-like tracking service
             if (io.trackingService && driverLocation) {
                 io.trackingService.startDriverTracking(
@@ -734,7 +719,10 @@ exports.acceptRideRequest = async (req, res) => {
         console.log('✅ Sending success response with ride:', populatedRide._id);
         res.json({ success: true, ride: populatedRide, message: 'Ride accepted successfully' });
     } catch (err) {
-        console.error('Accept ride error:', err);
+        console.error('❌ ACCEPT RIDE ERROR:', err);
+        console.error('Error stack:', err.stack);
+        console.error('Request params:', req.params);
+        console.error('User info:', { id: req.user?.id, role: req.user?.role });
         res.status(500).json({ success: false, error: err.message });
     }
 };
@@ -749,7 +737,24 @@ exports.getActiveTrips = async (req, res) => {
         .populate('driver_id', 'name phone rating')
         .sort({ 'timestamps.started_at': -1 });
         
-        res.json({ success: true, trips: activeTrips });
+        // Ensure proper population by checking both user_id and driver_id fields
+        const tripsWithNames = activeTrips.map(trip => {
+            const tripObj = trip.toObject();
+            
+            // Handle user name
+            if (tripObj.user_id && typeof tripObj.user_id === 'object') {
+                tripObj.userName = tripObj.user_id.name;
+            }
+            
+            // Handle driver name
+            if (tripObj.driver_id && typeof tripObj.driver_id === 'object') {
+                tripObj.driverName = tripObj.driver_id.name;
+            }
+            
+            return tripObj;
+        });
+        
+        res.json({ success: true, trips: tripsWithNames });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -910,7 +915,28 @@ exports.completeRide = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Ride must be in progress to complete' });
         }
         
+        // Calculate final fare based on actual trip
+        const actualDistance = ride.tracking?.actualDistance || ride.distance;
+        const actualTime = ride.timestamps.started_at ? 
+            Math.round((new Date() - new Date(ride.timestamps.started_at)) / (1000 * 60)) : 
+            ride.estimatedTime;
+        
+        const vehicleRates = {
+            economy: { baseFare: 50, perKm: 15, perMin: 2 },
+            sedan: { baseFare: 70, perKm: 20, perMin: 2.5 },
+            suv: { baseFare: 90, perKm: 25, perMin: 3 }
+        };
+        
+        const rates = vehicleRates[ride.vehicle_type] || vehicleRates.economy;
+        const finalFare = Math.round(
+            (rates.baseFare + (actualDistance * rates.perKm) + (actualTime * rates.perMin)) * 
+            ride.surgeMultiplier
+        );
+        
         ride.status = 'completed';
+        ride.actualFare = finalFare;
+        ride.actualDistance = actualDistance;
+        ride.actualTime = actualTime;
         ride.timestamps.completed_at = new Date();
         await ride.save();
         
@@ -956,16 +982,26 @@ exports.completeRide = async (req, res) => {
 // Get user's rides (includes ALL statuses including 'requested')
 exports.getUserRides = async (req, res) => {
     try {
-        console.log('Getting rides for user:', req.user.id);
+        console.log('Getting rides for user:', req.user.id, 'role:', req.user.role);
         
-        const rides = await Ride.find({ user_id: req.user.id })
+        let query = {};
+        if (req.user.role === 'admin') {
+            // Admin can see all rides
+            query = {};
+        } else if (req.user.role === 'driver') {
+            // Driver can see their assigned rides
+            query = { driver_id: req.user.id };
+        } else {
+            // Regular user can see their own rides
+            query = { user_id: req.user.id };
+        }
+        
+        const rides = await Ride.find(query)
             .populate('driver_id', 'name phone rating')
+            .populate('user_id', 'name phone')
             .sort({ createdAt: -1 });
         
-        console.log(`Found ${rides.length} rides for user ${req.user.id}`);
-        rides.forEach(ride => {
-            console.log(`Ride ${ride._id}: status=${ride.status}, created=${ride.createdAt}`);
-        });
+        console.log(`Found ${rides.length} rides for ${req.user.role} ${req.user.id}`);
         
         res.json({ success: true, rides });
     } catch (err) {
@@ -987,27 +1023,31 @@ exports.getDriverRides = async (req, res) => {
     }
 };
 
-// Find nearby drivers with enhanced matching
+// Find nearby drivers with strict vehicle type matching
 async function findNearbyDriversWithMatching(pickupLocation, vehicleType, userId) {
     try {
-        // Get all available drivers
+        console.log('=== FINDING NEARBY DRIVERS ===');
+        console.log('Pickup location:', pickupLocation);
+        console.log('Vehicle type requested:', vehicleType);
+        
+        // Get only drivers with exact vehicle type match
         const availableDrivers = await Driver.find({
             status: 'available',
             'driverInfo.isVerified': true,
             location: { $exists: true },
-            $or: [
-                { 'vehicleInfo.type': vehicleType },
-                { 'driverInfo.vehicleType': vehicleType },
-                { vehicle_type: vehicleType }
-            ]
-        }).select('name phone rating location lastActive vehicleInfo driverInfo vehicle_type');
+            'driverInfo.vehicleType': vehicleType
+        }).select('name phone rating location lastActive driverInfo');
+        
+        console.log(`Found ${availableDrivers.length} available drivers for ${vehicleType}`);
         
         if (availableDrivers.length === 0) {
             return [];
         }
         
-        // Calculate scores for each driver
+        // Calculate scores for each driver with strict vehicle type filtering
         const driversWithScores = availableDrivers.map(driver => {
+            // Vehicle type already filtered in query
+            
             const distance = calculateDistance(
                 pickupLocation.latitude,
                 pickupLocation.longitude,
@@ -1028,10 +1068,7 @@ async function findNearbyDriversWithMatching(pickupLocation, vehicleType, userId
             score += ratingScore;
             
             // Vehicle type exact match bonus
-            const driverVehicleType = driver.vehicleInfo?.type || driver.driverInfo?.vehicleType || driver.vehicle_type;
-            if (driverVehicleType === vehicleType) {
-                score += 20;
-            }
+            score += 20;
             
             // Activity score (more recent activity is better)
             const lastActiveMinutes = (new Date() - new Date(driver.lastActive)) / (1000 * 60);
@@ -1042,6 +1079,8 @@ async function findNearbyDriversWithMatching(pickupLocation, vehicleType, userId
             const responseTimeScore = 10; // Default score
             score += responseTimeScore;
             
+            console.log(`Driver ${driver.name}: vehicle=${driver.driverInfo.vehicleType}, distance=${distance.toFixed(2)}km, score=${score}`);
+            
             return {
                 ...driver.toObject(),
                 distance,
@@ -1049,6 +1088,8 @@ async function findNearbyDriversWithMatching(pickupLocation, vehicleType, userId
                 eta: Math.round(distance * 2) // Rough ETA calculation
             };
         });
+        
+        console.log(`After filtering: ${driversWithScores.length} drivers match ${vehicleType}`);
         
         // Sort by score (highest first) and distance (closest first)
         driversWithScores.sort((a, b) => {
@@ -1061,7 +1102,8 @@ async function findNearbyDriversWithMatching(pickupLocation, vehicleType, userId
         // Return top 5 drivers
         return driversWithScores.slice(0, 5);
     } catch (error) {
-        console.error('Error in enhanced driver matching:', error);
+        console.error('❌ Error in driver matching:', error);
+        console.error('Error stack:', error.stack);
         return [];
     }
 }
@@ -1110,30 +1152,15 @@ exports.findDriversInZone = async (req, res) => {
     }
 };
 
-// Calculate fare with surge pricing
-exports.calculateFare = async (req, res) => {
+// Dedicated fare estimation endpoint (no ride creation)
+exports.estimateFare = async (req, res) => {
     try {
-        const { pickup_location, drop_location, vehicle_type, include_surge } = req.body;
+        const { pickup_location, drop_location, vehicle_type } = req.body;
         
-        console.log('Fare calculation request:', {
-            pickup: pickup_location?.address || 'No address',
-            drop: drop_location?.address || 'No address',
-            vehicle_type,
-            pickup_coords: `${pickup_location?.latitude}, ${pickup_location?.longitude}`,
-            drop_coords: `${drop_location?.latitude}, ${drop_location?.longitude}`
-        });
-        
-        if (!pickup_location || !drop_location) {
+        if (!pickup_location || !drop_location || !vehicle_type) {
             return res.status(400).json({ 
                 success: false, 
-                error: 'Pickup and drop locations are required' 
-            });
-        }
-        
-        if (!pickup_location.latitude || !pickup_location.longitude || !drop_location.latitude || !drop_location.longitude) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Location coordinates are required' 
+                error: 'Pickup location, drop location, and vehicle type are required' 
             });
         }
         
@@ -1144,56 +1171,76 @@ exports.calculateFare = async (req, res) => {
             drop_location.longitude
         );
         
-        console.log('Calculated distance:', distance, 'km');
-        
-        // Vehicle type rates
         const vehicleRates = {
             economy: { baseFare: 50, perKm: 15, perMin: 2 },
             sedan: { baseFare: 70, perKm: 20, perMin: 2.5 },
             suv: { baseFare: 90, perKm: 25, perMin: 3 }
         };
         
-        const rates = vehicleRates[vehicle_type] || vehicleRates.economy;
+        const rates = vehicleRates[vehicle_type];
+        const estimatedTime = Math.round(distance * 2);
         
-        // Calculate base fare
         const baseFare = rates.baseFare;
         const distanceFare = distance * rates.perKm;
-        const estimatedTime = Math.round(distance * 2); // Rough estimate
         const timeFare = estimatedTime * rates.perMin;
+        const baseEstimatedFare = Math.round(baseFare + distanceFare + timeFare);
         
-        let baseEstimatedFare = Math.round(baseFare + distanceFare + timeFare);
-        
-        // Calculate surge pricing based on demand and time
-        let surgeMultiplier = 1.0;
-        if (include_surge) {
-            surgeMultiplier = await calculateSurgePricing(pickup_location, vehicle_type);
-        }
-        
+        const surgeMultiplier = await calculateSurgePricing(pickup_location, vehicle_type);
         const finalFare = Math.round(baseEstimatedFare * surgeMultiplier);
         
-        const result = {
+        res.json({
             success: true,
-            distance: distance.toFixed(2),
-            baseFare,
+            distance: parseFloat(distance.toFixed(2)),
             estimatedFare: finalFare,
             estimatedTime,
-            vehicle_type,
             surgeMultiplier: parseFloat(surgeMultiplier.toFixed(2)),
             fareBreakdown: {
                 baseFare,
                 distanceFare: Math.round(distanceFare),
                 timeFare: Math.round(timeFare),
-                surgeAmount: Math.round((finalFare - baseEstimatedFare))
-            }
-        };
-        
-        console.log('Fare calculation result:', result);
-        res.json(result);
+                surgeAmount: Math.round(finalFare - baseEstimatedFare)
+            },
+            isEstimate: true,
+            message: 'This is an estimate. Final fare may vary based on actual trip.'
+        });
     } catch (err) {
-        console.error('Fare calculation error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 };
+
+// Legacy calculate fare endpoint (kept for backward compatibility)
+exports.calculateFare = async (req, res) => {
+    return exports.estimateFare(req, res);
+};
+
+// Broadcast ride request to available drivers
+function broadcastToAvailableDrivers(rideId, vehicleType, pickupLocation, dropLocation, estimatedFare, io) {
+    Driver.find({
+        status: 'available',
+        'driverInfo.isVerified': true,
+        'driverInfo.vehicleType': vehicleType
+    }).select('_id name driverInfo')
+    .then(matchingDrivers => {
+        console.log(`Broadcasting to ${matchingDrivers.length} available ${vehicleType} drivers`);
+        
+        matchingDrivers.forEach(driver => {
+            io.emit(`driver_notification_${driver._id}`, {
+                type: 'ride_request',
+                rideId: rideId,
+                message: `New ${vehicleType} ride request`,
+                pickup: pickupLocation.address,
+                destination: dropLocation.address,
+                estimatedFare: estimatedFare,
+                vehicle_type: vehicleType,
+                requiresAcceptance: true,
+                timestamp: new Date()
+            });
+        });
+    })
+    .catch(error => {
+        console.error('Error broadcasting to drivers:', error);
+    });
+}
 
 // Calculate surge pricing based on demand and time
 async function calculateSurgePricing(pickupLocation, vehicleType) {

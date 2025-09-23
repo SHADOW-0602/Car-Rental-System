@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const rideSchema = new mongoose.Schema({
     user_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    driver_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    driver_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Driver' },
     preferred_driver_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 
     pickup_location: {
@@ -20,7 +20,7 @@ const rideSchema = new mongoose.Schema({
     vehicle_type: {
         type: String,
         enum: ['bike', 'sedan', 'suv'],
-        default: 'sedan'
+        required: true
     },
     payment_method: {
         type: String,
@@ -30,7 +30,7 @@ const rideSchema = new mongoose.Schema({
     status: { 
         type: String, 
         enum: ['requested', 'searching', 'accepted', 'driver_arriving', 'in_progress', 'completed', 'cancelled'], 
-        default: 'requested' 
+        default: 'searching' 
     },
     payment_status: {
         type: String,

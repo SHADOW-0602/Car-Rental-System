@@ -331,12 +331,30 @@ router.post('/reject-driver/:userId', auth, role(['admin']), async (req, res) =>
 // Verification request routes
 router.get('/verification-requests', auth, role(['admin']), async (req, res) => {
   try {
-    // Find drivers who have uploaded documents but are not yet verified
+    // Find drivers who have actually submitted verification documents
     const requests = await Driver.find({
-      $or: [
-        { 'driverInfo.isVerified': false },
-        { 'driverInfo.isVerified': { $exists: false } },
-        { 'verificationRequest.status': 'pending' }
+      $and: [
+        {
+          $or: [
+            { 'driverInfo.isVerified': false },
+            { 'driverInfo.isVerified': { $exists: false } }
+          ]
+        },
+        {
+          $or: [
+            { 'verificationRequest.status': 'pending' },
+            { 'verificationRequest.status': { $exists: false } }
+          ]
+        },
+        {
+          // Only show drivers who have uploaded at least one document
+          $or: [
+            { 'driverInfo.documents.licensePhoto': { $exists: true, $ne: null } },
+            { 'driverInfo.documents.vehicleRC': { $exists: true, $ne: null } },
+            { 'driverInfo.documents.insurance': { $exists: true, $ne: null } },
+            { 'driverInfo.documents.profilePhoto': { $exists: true, $ne: null } }
+          ]
+        }
       ]
     }, { 
       name: 1, 
@@ -375,7 +393,8 @@ router.put('/verification/:driverId/reject', auth, role(['admin']), async (req, 
     await Driver.findByIdAndUpdate(req.params.driverId, {
       'verificationRequest.status': 'rejected',
       'verificationRequest.reviewedAt': new Date(),
-      'verificationRequest.reviewedBy': req.user.id
+      'verificationRequest.reviewedBy': req.user.id,
+      'driverInfo.isVerified': false
     });
     
     res.json({ success: true, message: 'Verification rejected' });
@@ -576,9 +595,18 @@ router.post('/contact-messages/:messageId/reply', auth, role(['admin']), async (
     );
     
     // Try to send email reply (don't fail if email fails)
+    console.log('=== SENDING EMAIL REPLY ===');
+    console.log('Recipient email:', message.email);
+    console.log('Email environment check:', {
+      EMAIL_USER: process.env.EMAIL_USER ? 'Set' : 'Not set',
+      EMAIL_PASS: process.env.EMAIL_PASS ? 'Set' : 'Not set'
+    });
+    
     let emailDelivered = false;
     try {
       const emailService = require('../services/emailService');
+      console.log('Email service loaded successfully');
+      
       const emailTemplate = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <h2 style="color: #667eea;">📧 Reply to Your Contact Message</h2>
@@ -600,14 +628,24 @@ router.post('/contact-messages/:messageId/reply', auth, role(['admin']), async (
         </div>
       `;
       
-      await emailService.sendMarketingEmail(
+      console.log('Attempting to send email...');
+      const emailResult = await emailService.sendMarketingEmail(
         message.email, 
         `Re: ${message.subject}`, 
         emailTemplate
       );
-      emailDelivered = true;
+      
+      console.log('Email send result:', emailResult);
+      emailDelivered = emailResult === true;
+      
+      if (emailDelivered) {
+        console.log('✅ Email sent successfully');
+      } else {
+        console.log('❌ Email sending failed - result was not true');
+      }
     } catch (emailError) {
-      console.error('Email sending failed:', emailError);
+      console.error('❌ Email sending failed with error:', emailError);
+      console.error('Error stack:', emailError.stack);
     }
     
     // Update email delivery status
@@ -617,7 +655,10 @@ router.post('/contact-messages/:messageId/reply', auth, role(['admin']), async (
       'Reply sent successfully and email delivered' : 
       'Reply sent successfully (email delivery failed - user can view reply in portal)';
     
-    res.json({ success: true, message: responseMessage });
+    console.log('Final response:', responseMessage);
+    console.log('=== EMAIL REPLY PROCESS COMPLETE ===');
+    
+    res.json({ success: true, message: responseMessage, emailDelivered });
   } catch (error) {
     console.error('Reply error:', error);
     res.status(500).json({ success: false, error: error.message });

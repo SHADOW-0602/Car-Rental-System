@@ -15,7 +15,10 @@ router.get('/nearby-drivers', auth, role(['user']), rideController.findNearbyDri
 // Find drivers in zone
 router.get('/zone-drivers', auth, role(['user']), rideController.findDriversInZone);
 
-// Calculate fare estimate
+// Estimate fare (no ride creation)
+router.post('/estimate-fare', auth, role(['user']), rideController.estimateFare);
+
+// Calculate fare estimate (legacy)
 router.post('/calculate-fare', auth, role(['user']), rideController.calculateFare);
 
 // Get distance matrix
