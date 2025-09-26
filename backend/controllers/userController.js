@@ -33,6 +33,16 @@ exports.register = async (req, res) => {
         if (existingUser || existingDriver || existingAdmin) {
             return res.status(400).json({ success: false, error: 'Email already registered' });
         }
+        
+        // Check if phone number exists in any collection
+        const [existingUserPhone, existingDriverPhone] = await Promise.all([
+            User.findOne({ phone }),
+            Driver.findOne({ phone })
+        ]);
+        
+        if (existingUserPhone || existingDriverPhone) {
+            return res.status(400).json({ success: false, error: 'Phone number already registered' });
+        }
 
         const hashedPassword = await bcrypt.hash(password, 10);
         

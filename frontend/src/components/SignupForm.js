@@ -16,6 +16,7 @@ export default function SignupForm({ onSignup }) {
     driverInfo: {
       licenseNumber: '',
       vehicleType: '',
+      registrationNumber: '',
       experience: ''
     }
   });
@@ -218,6 +219,21 @@ export default function SignupForm({ onSignup }) {
               
               <div className="form-group">
                 <label className="form-label">
+                  Vehicle Registration Number
+                </label>
+                <input
+                  type="text"
+                  name="driver.registrationNumber"
+                  value={formData.driverInfo.registrationNumber}
+                  onChange={handleChange}
+                  placeholder="Enter vehicle registration number (e.g., DL-01-AB-1234)"
+                  required
+                  className="form-input"
+                />
+              </div>
+              
+              <div className="form-group">
+                <label className="form-label">
                   Vehicle Type
                 </label>
                 <select
@@ -228,10 +244,9 @@ export default function SignupForm({ onSignup }) {
                   className="form-input"
                 >
                   <option value="">Select vehicle type</option>
+                  <option value="bike">🏍️ Bike</option>
                   <option value="sedan">🚗 Sedan</option>
                   <option value="suv">🚙 SUV</option>
-                  <option value="hatchback">🚘 Hatchback</option>
-                  <option value="luxury">🏎️ Luxury</option>
                 </select>
               </div>
               

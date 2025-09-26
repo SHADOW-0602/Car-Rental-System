@@ -438,8 +438,7 @@ export default function DriverPortal() {
                     {[
                         { id: 'requests', label: '📋 Ride Requests' },
                         { id: 'active', label: '🚗 Active Rides' },
-                        { id: 'history', label: '📊 Ride History' },
-                        { id: 'ratings', label: '⭐ User Ratings' }
+                        { id: 'history', label: '📊 Ride History' }
                     ].map(tab => (
                         <motion.button
                             key={tab.id}
@@ -555,6 +554,11 @@ export default function DriverPortal() {
                                                 <span style={{ backgroundColor: '#f1f5f9', padding: '2px 8px', borderRadius: '12px' }}>
                                                     💳 {request.payment_method?.toUpperCase()}
                                                 </span>
+                                                {request.user_id?.rating && (
+                                                    <span style={{ backgroundColor: '#fef3c7', padding: '2px 8px', borderRadius: '12px', color: '#d97706' }}>
+                                                        ⭐ {request.user_id.rating}/5
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
@@ -879,88 +883,7 @@ export default function DriverPortal() {
                     </div>
                 )}
 
-                {/* User Ratings Tab */}
-                {activeTab === 'ratings' && (
-                    <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '15px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
-                        <h2 style={{ marginBottom: '20px' }}>Ratings from Users</h2>
-                        
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '30px' }}>
-                            <div style={{ padding: '20px', backgroundColor: '#fef3c7', borderRadius: '10px', textAlign: 'center' }}>
-                                <div style={{ fontSize: '24px', fontWeight: '700', color: '#d97706' }}>
-                                    {driverStats.rating > 0 ? `${driverStats.rating}/5` : '0/5'} ⭐
-                                </div>
-                                <div style={{ color: '#d97706' }}>Average Rating</div>
-                            </div>
-                            <div style={{ padding: '20px', backgroundColor: '#f0fdf4', borderRadius: '10px', textAlign: 'center' }}>
-                                <div style={{ fontSize: '24px', fontWeight: '700', color: '#16a34a' }}>
-                                    {driverStats.totalRatings}
-                                </div>
-                                <div style={{ color: '#16a34a' }}>Total Reviews</div>
-                            </div>
-                        </div>
 
-                        {myRides.filter(ride => ride.status === 'completed' && ride.user_rating).map(ride => (
-                            <div key={ride._id} style={{
-                                padding: '20px',
-                                border: '1px solid #e2e8f0',
-                                borderRadius: '10px',
-                                marginBottom: '15px'
-                            }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                                    <div>
-                                        <h3 style={{ margin: '0 0 5px 0', fontSize: '16px' }}>
-                                            {ride.user_id?.name || 'Anonymous User'}
-                                        </h3>
-                                        <p style={{ margin: '0 0 5px 0', color: '#64748b', fontSize: '14px' }}>
-                                            {new Date(ride.createdAt).toLocaleDateString()}
-                                        </p>
-                                        <p style={{ margin: 0, color: '#64748b', fontSize: '12px' }}>
-                                            {ride.pickup_location?.address} → {ride.drop_location?.address}
-                                        </p>
-                                    </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <div style={{ fontSize: '18px', marginBottom: '5px' }}>
-                                            {[1, 2, 3, 4, 5].map(star => (
-                                                <span key={star} style={{ color: star <= ride.user_rating ? '#fbbf24' : '#d1d5db' }}>
-                                                    ★
-                                                </span>
-                                            ))}
-                                        </div>
-                                        <div style={{ fontSize: '14px', color: '#64748b' }}>
-                                            {ride.user_rating}/5 stars
-                                        </div>
-                                    </div>
-                                </div>
-                                {ride.user_feedback && (
-                                    <div style={{
-                                        backgroundColor: '#f8fafc',
-                                        padding: '12px',
-                                        borderRadius: '8px',
-                                        marginTop: '10px'
-                                    }}>
-                                        <p style={{ margin: 0, fontSize: '14px', color: '#374151', fontStyle: 'italic' }}>
-                                            "{ride.user_feedback}"
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                        
-                        {myRides.filter(ride => ride.status === 'completed' && ride.user_rating).length === 0 && (
-                            <div style={{
-                                textAlign: 'center',
-                                padding: '60px 30px',
-                                backgroundColor: '#f8fafc',
-                                borderRadius: '15px',
-                                border: '2px dashed #cbd5e1'
-                            }}>
-                                <div style={{ fontSize: '64px', marginBottom: '20px' }}>⭐</div>
-                                <h3 style={{ color: '#1e293b', marginBottom: '10px' }}>No Ratings Yet</h3>
-                                <p style={{ color: '#64748b' }}>Complete rides to receive ratings from users</p>
-                            </div>
-                        )}
-                    </div>
-                )}
 
             </AnimatedContainer>
 

@@ -170,8 +170,8 @@ export default function DriverRegister() {
               />
             </div>
             
-            <div className="form-group">
-              <label className="form-label">Vehicle Registration Number</label>
+            <div className="form-group" style={{ backgroundColor: '#fef3c7', padding: '15px', borderRadius: '8px', border: '1px solid #f59e0b' }}>
+              <label className="form-label" style={{ color: '#92400e', fontWeight: '600' }}>🚗 Vehicle Registration Number *</label>
               <input
                 type="text"
                 name="driver.registrationNumber"
@@ -180,7 +180,11 @@ export default function DriverRegister() {
                 placeholder="Enter vehicle registration number (e.g., DL-01-AB-1234)"
                 required
                 className="form-input"
+                style={{ backgroundColor: 'white', border: '2px solid #f59e0b' }}
               />
+              <small style={{ color: '#92400e', fontSize: '12px', marginTop: '5px', display: 'block' }}>
+                💡 This will be displayed to passengers for vehicle identification
+              </small>
             </div>
             
             <div className="form-group">
@@ -192,7 +196,7 @@ export default function DriverRegister() {
                 required
                 className="form-input"
               >
-                <option value="">Select vehicle type</option>
+                <option value="">Select your vehicle type</option>
                 <option value="bike">🏍️ Bike</option>
                 <option value="sedan">🚗 Sedan</option>
                 <option value="suv">🚙 SUV</option>
