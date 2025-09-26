@@ -11,14 +11,20 @@
     "install-deps": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "vercel-build": "cd frontend && npm install && npm run build"
   },
-  "keywords": ["car-rental", "react", "nodejs", "mongodb", "vercel"],
+  "keywords": [
+    "car-rental",
+    "react",
+    "nodejs",
+    "mongodb",
+    "vercel"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@vercel/speed-insights": "^1.2.0",
     "motion": "^12.23.12",
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.5",
-    "reshaped": "^3.7.4",
     "ua-parser-js": "^2.0.4"
   },
   "devDependencies": {
