@@ -27,13 +27,19 @@ export default function DriverPortal() {
         totalEarnings: 0,
         thisMonthEarnings: 0
     });
+    const [showRatingModal, setShowRatingModal] = useState(false);
+    const [selectedRideForRating, setSelectedRideForRating] = useState(null);
+    const [userRating, setUserRating] = useState(0);
+    const [userFeedback, setUserFeedback] = useState('');
+    const [showOTPModal, setShowOTPModal] = useState(false);
+    const [selectedRideForOTP, setSelectedRideForOTP] = useState(null);
+    const [otpInput, setOtpInput] = useState('');
 
     useEffect(() => {
         if (user && user._id) {
             setRideRequests([]);
             loadRideRequests();
             loadMyRides();
-            loadDriverStats();
             
             // Only initialize socket if not already connected
             if (!socket) {
@@ -55,10 +61,29 @@ export default function DriverPortal() {
 
     const loadDriverStats = async () => {
         try {
-            const response = await api.get('/ratings/driver-stats');
-            if (response.data.success) {
-                setDriverStats(response.data.stats);
+            const completedRides = myRides.filter(r => r.status === 'completed');
+            const totalEarnings = completedRides.reduce((sum, r) => sum + (r.fare || 0), 0);
+            const thisMonth = new Date();
+            thisMonth.setDate(1);
+            const thisMonthRides = completedRides.filter(r => new Date(r.createdAt) >= thisMonth);
+            const thisMonthEarnings = thisMonthRides.reduce((sum, r) => sum + (r.fare || 0), 0);
+            
+            // Get actual rating count from API
+            let totalRatings = 0;
+            try {
+                const ratingsResponse = await api.get('/ratings/driver-summary');
+                totalRatings = ratingsResponse.data.totalRatings || 0;
+            } catch (ratingsError) {
+                console.error('Error fetching ratings:', ratingsError);
             }
+            
+            setDriverStats({
+                rating: user.rating || 0,
+                totalRatings,
+                completedRides: completedRides.length,
+                totalEarnings,
+                thisMonthEarnings
+            });
         } catch (error) {
             console.error('Error loading driver stats:', error);
         }
@@ -109,6 +134,10 @@ export default function DriverPortal() {
             } else if (data.type === 'remove_ride_request') {
                 console.log('Removing ride request:', data.rideId);
                 setRideRequests(prev => prev.filter(req => req._id !== data.rideId));
+            } else if (data.type === 'payment_received') {
+                console.log('Payment received notification:', data);
+                alert(`💰 Payment Received!\n\nAmount: ₹${data.amount}\nFrom: ${data.message.split('from ')[1].split('.')[0]}\n\nYou can now end the ride.`);
+                loadMyRides(); // Refresh rides to show updated payment status
             }
         });
         
@@ -237,12 +266,20 @@ export default function DriverPortal() {
     const loadMyRides = async () => {
         try {
             const response = await api.get('/rides/driver');
-            setMyRides(Array.isArray(response.data) ? response.data : []);
+            const rides = response.data.rides || response.data || [];
+            console.log('Loaded driver rides:', rides);
+            setMyRides(Array.isArray(rides) ? rides : []);
         } catch (error) {
             console.error('Error loading rides:', error);
             setMyRides([]);
         }
     };
+
+    useEffect(() => {
+        if (myRides.length > 0) {
+            loadDriverStats();
+        }
+    }, [myRides]);
 
     const acceptRide = async (rideId) => {
         try {
@@ -265,7 +302,6 @@ export default function DriverPortal() {
             if (response.data.success) {
                 alert('Ride accepted successfully!');
                 loadMyRides();
-                loadDriverStats();
                 
                 // Start location updates for live tracking
                 const locationUpdateInterval = setInterval(() => {
@@ -402,7 +438,8 @@ export default function DriverPortal() {
                     {[
                         { id: 'requests', label: '📋 Ride Requests' },
                         { id: 'active', label: '🚗 Active Rides' },
-                        { id: 'history', label: '📊 Ride History' }
+                        { id: 'history', label: '📊 Ride History' },
+                        { id: 'ratings', label: '⭐ User Ratings' }
                     ].map(tab => (
                         <motion.button
                             key={tab.id}
@@ -659,8 +696,8 @@ export default function DriverPortal() {
                 {/* Active Rides Tab */}
                 {activeTab === 'active' && (
                     <div>
-                        {myRides.filter(ride => ['accepted', 'in_progress'].includes(ride.status)).length > 0 ? (
-                            myRides.filter(ride => ['accepted', 'in_progress'].includes(ride.status)).map(ride => (
+                        {myRides.filter(ride => ['accepted', 'in_progress', 'driver_arrived', 'driver_arriving'].includes(ride.status)).length > 0 ? (
+                            myRides.filter(ride => ['accepted', 'in_progress', 'driver_arrived', 'driver_arriving'].includes(ride.status)).map(ride => (
                                 <div key={ride._id} style={{
                                     backgroundColor: 'white',
                                     padding: '25px',
@@ -703,21 +740,22 @@ export default function DriverPortal() {
                                             <div style={{ fontSize: '12px', color: '#64748b' }}>Fare</div>
                                         </div>
                                         <div style={{ textAlign: 'center' }}>
-                                            <div style={{ fontSize: '16px', fontWeight: '600', color: '#2563eb' }}>{ride.payment_method}</div>
-                                            <div style={{ fontSize: '12px', color: '#64748b' }}>Payment</div>
+                                            <div style={{ fontSize: '14px', fontWeight: '600', color: '#2563eb' }}>
+                                                {ride.payment_method} {ride.payment_status === 'paid' ? '✅' : '⏳'}
+                                            </div>
+                                            <div style={{ fontSize: '12px', color: '#64748b' }}>
+                                                {ride.payment_status === 'paid' ? 'Paid' : 'Pending'}
+                                            </div>
                                         </div>
                                     </div>
                                     
                                     <div style={{ display: 'flex', gap: '10px' }}>
                                         {ride.status === 'accepted' && (
                                             <button
-                                                onClick={async () => {
-                                                    try {
-                                                        await api.put(`/rides/${ride._id}/start`);
-                                                        loadMyRides();
-                                                    } catch (error) {
-                                                        alert('Failed to start ride');
-                                                    }
+                                                onClick={() => {
+                                                    setSelectedRideForOTP(ride);
+                                                    setShowOTPModal(true);
+                                                    setOtpInput('');
                                                 }}
                                                 className="btn btn-success"
                                                 style={{ flex: 1, padding: '12px' }}
@@ -730,10 +768,20 @@ export default function DriverPortal() {
                                                 <button
                                                     onClick={async () => {
                                                         try {
-                                                            await api.put(`/rides/${ride._id}/complete`);
-                                                            loadMyRides();
+                                                            console.log('Completing ride:', ride._id);
+                                                            const response = await api.put(`/rides/${ride._id}/complete`);
+                                                            console.log('Complete ride response:', response.data);
+                                                            if (response.data.success) {
+                                                                setSelectedRideForRating(ride);
+                                                                setShowRatingModal(true);
+                                                                loadMyRides();
+                                                            } else {
+                                                                alert(response.data.error || 'Failed to complete ride');
+                                                            }
                                                         } catch (error) {
-                                                            alert('Failed to complete ride');
+                                                            console.error('Complete ride error:', error);
+                                                            console.error('Error response:', error.response?.data);
+                                                            alert(error.response?.data?.error || 'Failed to complete ride');
                                                         }
                                                     }}
                                                     className="btn btn-success"
@@ -743,23 +791,16 @@ export default function DriverPortal() {
                                                 </button>
                                                 <button
                                                     onClick={() => {
-                                                        const paymentUrls = {
-                                                            razorpay: `https://razorpay.com/payment-links/`,
-                                                            stripe: `https://dashboard.stripe.com/payments`,
-                                                            paypal: `https://www.paypal.com/myaccount/transfer`,
-                                                            cash: null
-                                                        };
-                                                        const url = paymentUrls[ride.payment_method];
-                                                        if (url) {
-                                                            window.open(url, '_blank');
+                                                        if (ride.payment_method === 'cash') {
+                                                            alert('Cash payment - collect ₹' + ride.fare + ' directly from passenger');
                                                         } else {
-                                                            alert('Cash payment - collect directly from passenger');
+                                                            alert('Payment will be handled by passenger through the app. Fare: ₹' + ride.fare);
                                                         }
                                                     }}
                                                     className="btn btn-primary"
                                                     style={{ padding: '12px 20px' }}
                                                 >
-                                                    💳 Payment
+                                                    💳 Payment Info
                                                 </button>
                                             </>
                                         )}
@@ -790,15 +831,21 @@ export default function DriverPortal() {
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '30px' }}>
                             <div style={{ padding: '20px', backgroundColor: '#f0fdf4', borderRadius: '10px', textAlign: 'center' }}>
                                 <div style={{ fontSize: '24px', fontWeight: '700', color: '#16a34a' }}>
-                                    {myRides.filter(r => r.status === 'completed').length}
+                                    {driverStats.completedRides}
                                 </div>
                                 <div style={{ color: '#16a34a' }}>Completed Rides</div>
                             </div>
                             <div style={{ padding: '20px', backgroundColor: '#fef3c7', borderRadius: '10px', textAlign: 'center' }}>
                                 <div style={{ fontSize: '24px', fontWeight: '700', color: '#d97706' }}>
-                                    ₹{myRides.filter(r => r.status === 'completed').reduce((sum, r) => sum + (r.fare || 0), 0)}
+                                    ₹{driverStats.totalEarnings}
                                 </div>
                                 <div style={{ color: '#d97706' }}>Total Earnings</div>
+                            </div>
+                            <div style={{ padding: '20px', backgroundColor: '#dbeafe', borderRadius: '10px', textAlign: 'center' }}>
+                                <div style={{ fontSize: '24px', fontWeight: '700', color: '#2563eb' }}>
+                                    ₹{driverStats.thisMonthEarnings}
+                                </div>
+                                <div style={{ color: '#2563eb' }}>This Month</div>
                             </div>
                         </div>
 
@@ -823,7 +870,7 @@ export default function DriverPortal() {
                                             ₹{ride.fare}
                                         </div>
                                         <div style={{ fontSize: '12px', color: '#64748b' }}>
-                                            Rating: {ride.driver_rating || 'Not rated'}
+                                            Rating: {ride.rating || 'Not rated'}
                                         </div>
                                     </div>
                                 </div>
@@ -832,7 +879,354 @@ export default function DriverPortal() {
                     </div>
                 )}
 
+                {/* User Ratings Tab */}
+                {activeTab === 'ratings' && (
+                    <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '15px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
+                        <h2 style={{ marginBottom: '20px' }}>Ratings from Users</h2>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+                            <div style={{ padding: '20px', backgroundColor: '#fef3c7', borderRadius: '10px', textAlign: 'center' }}>
+                                <div style={{ fontSize: '24px', fontWeight: '700', color: '#d97706' }}>
+                                    {driverStats.rating > 0 ? `${driverStats.rating}/5` : '0/5'} ⭐
+                                </div>
+                                <div style={{ color: '#d97706' }}>Average Rating</div>
+                            </div>
+                            <div style={{ padding: '20px', backgroundColor: '#f0fdf4', borderRadius: '10px', textAlign: 'center' }}>
+                                <div style={{ fontSize: '24px', fontWeight: '700', color: '#16a34a' }}>
+                                    {driverStats.totalRatings}
+                                </div>
+                                <div style={{ color: '#16a34a' }}>Total Reviews</div>
+                            </div>
+                        </div>
+
+                        {myRides.filter(ride => ride.status === 'completed' && ride.user_rating).map(ride => (
+                            <div key={ride._id} style={{
+                                padding: '20px',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '10px',
+                                marginBottom: '15px'
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                                    <div>
+                                        <h3 style={{ margin: '0 0 5px 0', fontSize: '16px' }}>
+                                            {ride.user_id?.name || 'Anonymous User'}
+                                        </h3>
+                                        <p style={{ margin: '0 0 5px 0', color: '#64748b', fontSize: '14px' }}>
+                                            {new Date(ride.createdAt).toLocaleDateString()}
+                                        </p>
+                                        <p style={{ margin: 0, color: '#64748b', fontSize: '12px' }}>
+                                            {ride.pickup_location?.address} → {ride.drop_location?.address}
+                                        </p>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontSize: '18px', marginBottom: '5px' }}>
+                                            {[1, 2, 3, 4, 5].map(star => (
+                                                <span key={star} style={{ color: star <= ride.user_rating ? '#fbbf24' : '#d1d5db' }}>
+                                                    ★
+                                                </span>
+                                            ))}
+                                        </div>
+                                        <div style={{ fontSize: '14px', color: '#64748b' }}>
+                                            {ride.user_rating}/5 stars
+                                        </div>
+                                    </div>
+                                </div>
+                                {ride.user_feedback && (
+                                    <div style={{
+                                        backgroundColor: '#f8fafc',
+                                        padding: '12px',
+                                        borderRadius: '8px',
+                                        marginTop: '10px'
+                                    }}>
+                                        <p style={{ margin: 0, fontSize: '14px', color: '#374151', fontStyle: 'italic' }}>
+                                            "{ride.user_feedback}"
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                        
+                        {myRides.filter(ride => ride.status === 'completed' && ride.user_rating).length === 0 && (
+                            <div style={{
+                                textAlign: 'center',
+                                padding: '60px 30px',
+                                backgroundColor: '#f8fafc',
+                                borderRadius: '15px',
+                                border: '2px dashed #cbd5e1'
+                            }}>
+                                <div style={{ fontSize: '64px', marginBottom: '20px' }}>⭐</div>
+                                <h3 style={{ color: '#1e293b', marginBottom: '10px' }}>No Ratings Yet</h3>
+                                <p style={{ color: '#64748b' }}>Complete rides to receive ratings from users</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
             </AnimatedContainer>
+
+            {/* Driver Rating Modal */}
+            {showRatingModal && selectedRideForRating && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000
+                }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '15px',
+                        padding: '30px',
+                        maxWidth: '500px',
+                        width: '90%'
+                    }}>
+                        <h2 style={{ margin: '0 0 20px 0', textAlign: 'center' }}>Rate Your Passenger</h2>
+                        <p style={{ textAlign: 'center', color: '#64748b', marginBottom: '20px' }}>
+                            How was your experience with {selectedRideForRating.user?.name}?
+                        </p>
+                        
+                        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                            {[1, 2, 3, 4, 5].map(star => (
+                                <button
+                                    key={star}
+                                    onClick={() => setUserRating(star)}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        fontSize: '30px',
+                                        cursor: 'pointer',
+                                        color: star <= userRating ? '#fbbf24' : '#d1d5db',
+                                        margin: '0 5px',
+                                        transition: 'color 0.2s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        // Highlight stars on hover
+                                        const buttons = e.target.parentElement.children;
+                                        for (let i = 0; i < star; i++) {
+                                            buttons[i].style.color = '#fbbf24';
+                                        }
+                                        for (let i = star; i < 5; i++) {
+                                            buttons[i].style.color = '#d1d5db';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        // Reset to selected rating
+                                        const buttons = e.target.parentElement.children;
+                                        for (let i = 0; i < 5; i++) {
+                                            buttons[i].style.color = (i + 1) <= userRating ? '#fbbf24' : '#d1d5db';
+                                        }
+                                    }}
+                                >
+                                    {star <= userRating ? '★' : '☆'}
+                                </button>
+                            ))}
+                        </div>
+                        
+                        <textarea
+                            value={userFeedback}
+                            onChange={(e) => setUserFeedback(e.target.value)}
+                            placeholder="Share your feedback about the passenger (optional)"
+                            style={{
+                                width: '100%',
+                                height: '80px',
+                                padding: '12px',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '8px',
+                                marginBottom: '20px',
+                                resize: 'none'
+                            }}
+                        />
+                        
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={() => {
+                                    setShowRatingModal(false);
+                                    setSelectedRideForRating(null);
+                                    setUserRating(0);
+                                    setUserFeedback('');
+                                }}
+                                style={{
+                                    padding: '10px 20px',
+                                    backgroundColor: '#64748b',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Skip
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    if (userRating === 0) {
+                                        alert('Please select a rating');
+                                        return;
+                                    }
+                                    try {
+                                        await api.post(`/rides/${selectedRideForRating._id}/rate-user`, {
+                                            rating: userRating,
+                                            feedback: userFeedback
+                                        });
+                                        alert('Thank you for rating the passenger!');
+                                        setShowRatingModal(false);
+                                        setSelectedRideForRating(null);
+                                        setUserRating(0);
+                                        setUserFeedback('');
+                                    } catch (error) {
+                                        alert('Failed to submit rating');
+                                    }
+                                }}
+                                style={{
+                                    padding: '10px 20px',
+                                    backgroundColor: '#22c55e',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Submit Rating
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* OTP Verification Modal */}
+            {showOTPModal && selectedRideForOTP && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000
+                }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '15px',
+                        padding: '30px',
+                        maxWidth: '400px',
+                        width: '90%'
+                    }}>
+                        <h2 style={{ margin: '0 0 20px 0', textAlign: 'center' }}>Enter Passenger OTP</h2>
+                        <p style={{ textAlign: 'center', color: '#64748b', marginBottom: '20px' }}>
+                            Ask the passenger for their ride OTP to start the trip
+                        </p>
+                        
+                        <input
+                            type="text"
+                            value={otpInput}
+                            onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                            placeholder="Enter 4-digit OTP"
+                            style={{
+                                width: '100%',
+                                padding: '15px',
+                                border: '2px solid #e2e8f0',
+                                borderRadius: '8px',
+                                fontSize: '18px',
+                                textAlign: 'center',
+                                letterSpacing: '4px',
+                                marginBottom: '20px'
+                            }}
+                            maxLength={4}
+                        />
+                        
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'space-between' }}>
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        const response = await api.post(`/rides/${selectedRideForOTP._id}/regenerate-otp`);
+                                        if (response.data.success) {
+                                            setOtpInput('');
+                                        } else {
+                                            alert(response.data.error || 'Failed to regenerate OTP');
+                                        }
+                                    } catch (error) {
+                                        alert(error.response?.data?.error || 'Failed to regenerate OTP');
+                                    }
+                                }}
+                                style={{
+                                    padding: '10px 20px',
+                                    backgroundColor: '#f59e0b',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Regenerate OTP
+                            </button>
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                                <button
+                                    onClick={() => {
+                                        setShowOTPModal(false);
+                                        setSelectedRideForOTP(null);
+                                        setOtpInput('');
+                                    }}
+                                    style={{
+                                        padding: '10px 20px',
+                                        backgroundColor: '#64748b',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        if (otpInput.length !== 4) {
+                                            alert('Please enter a 4-digit OTP');
+                                            return;
+                                        }
+                                        try {
+                                            console.log('Verifying OTP and starting ride:', selectedRideForOTP._id);
+                                            const response = await api.post(`/rides/${selectedRideForOTP._id}/verify-otp-start`, {
+                                                otp: otpInput
+                                            });
+                                            console.log('OTP verification response:', response.data);
+                                            if (response.data.success) {
+                                                alert('Ride started successfully!');
+                                                setShowOTPModal(false);
+                                                setSelectedRideForOTP(null);
+                                                setOtpInput('');
+                                                loadMyRides();
+                                            } else {
+                                                alert(response.data.error || 'Invalid OTP');
+                                            }
+                                        } catch (error) {
+                                            console.error('OTP verification error:', error);
+                                            alert(error.response?.data?.error || 'Failed to verify OTP');
+                                        }
+                                    }}
+                                    disabled={otpInput.length !== 4}
+                                    style={{
+                                        padding: '10px 20px',
+                                        backgroundColor: otpInput.length === 4 ? '#22c55e' : '#94a3b8',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        cursor: otpInput.length === 4 ? 'pointer' : 'not-allowed'
+                                    }}
+                                >
+                                    Start Ride
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
         </div>
     );

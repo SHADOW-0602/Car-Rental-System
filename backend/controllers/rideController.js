@@ -5,18 +5,33 @@ const User = require('../models/User');
 const { calculateDistance } = require('../utils/haversine');
 const { parseLocationFile, findNearbyDrivers, findDriversInZone, getDistanceMatrix } = require('../services/locationService');
 const InvoiceService = require('../services/invoiceService');
-const RatingService = require('../services/ratingService');
-// Note: TrackingService is now handled via socket.io in trackingSocket.js
+const FareEstimationService = require('../services/trip-planning/fareEstimationService');
+const DriverMatchingService = require('../services/matching/driverMatchingService');
+const TripTrackingService = require('../services/trip-execution/tripTrackingService');
+const RatingFeedbackService = require('../services/post-trip/ratingFeedbackService');
 const { generateOTPWithExpiry, verifyOTP, isOTPExpired } = require('../utils/otpGenerator');
 
 const invoiceService = new InvoiceService();
-const ratingService = new RatingService();
+const fareEstimationService = new FareEstimationService();
+const driverMatchingService = new DriverMatchingService();
+const ratingFeedbackService = new RatingFeedbackService();
+
+// Trip tracking service will be initialized with socket.io instance
+let tripTrackingService = null;
 
 // Helper function to get driver's current location
 async function getDriverCurrentLocation(driverId) {
     try {
-        const driversData = parseLocationFile();
-        return driversData.find(d => d._id === driverId);
+        // Get driver location from database instead of file
+        const driver = await Driver.findById(driverId).select('location');
+        if (driver && driver.location) {
+            return {
+                latitude: driver.location.latitude,
+                longitude: driver.location.longitude,
+                address: driver.location.address
+            };
+        }
+        return null;
     } catch (error) {
         console.error('Error getting driver location:', error);
         return null;
@@ -26,13 +41,13 @@ async function getDriverCurrentLocation(driverId) {
 exports.requestRide = async (req, res) => {
     try {
         console.log('=== RIDE REQUEST START ===');
-        const { pickup_location, drop_location, vehicle_type, payment_method, preferred_driver_id, surge_multiplier } = req.body;
+        const { pickup_location, drop_location, vehicle_type, payment_method, preferred_driver_id, promo_code } = req.body;
         console.log('Request data:', { pickup_location, drop_location, vehicle_type, payment_method });
         
         // Check for existing active ride
         const existingRide = await Ride.findOne({
             user_id: req.user.id,
-            status: { $in: ['requested', 'accepted', 'in_progress'] }
+            status: { $in: ['requested', 'searching', 'accepted', 'in_progress'] }
         }).populate('driver_id', 'name phone rating');
         
         if (existingRide) {
@@ -45,91 +60,96 @@ exports.requestRide = async (req, res) => {
         }
         
         // Validate required fields
-        if (!pickup_location || !drop_location) {
+        if (!pickup_location || !drop_location || !vehicle_type || !payment_method) {
             return res.status(400).json({ 
                 success: false,
-                error: 'Pickup and drop locations are required'
+                error: 'Pickup location, drop location, vehicle type, and payment method are required'
             });
         }
         
-        if (!payment_method) {
-            return res.status(400).json({ 
-                success: false,
-                error: 'Payment method is required'
-            });
-        }
-        
-        // Store initial estimate for reference
-        const distance = calculateDistance(
-            pickup_location.latitude, pickup_location.longitude,
-            drop_location.latitude, drop_location.longitude
+        // Get upfront pricing
+        const pricingData = await fareEstimationService.getUpfrontPricing(
+            pickup_location, 
+            drop_location, 
+            [vehicle_type]
         );
         
-        const vehicleRates = {
-            economy: { baseFare: 50, perKm: 15, perMin: 2 },
-            sedan: { baseFare: 70, perKm: 20, perMin: 2.5 },
-            suv: { baseFare: 90, perKm: 25, perMin: 3 }
-        };
+        if (!pricingData.vehicleOptions || pricingData.vehicleOptions.length === 0) {
+            return res.status(400).json({ 
+                success: false,
+                error: 'Unable to calculate fare for selected vehicle type'
+            });
+        }
         
-        const rates = vehicleRates[vehicle_type] || vehicleRates.economy;
-        const estimatedTime = Math.round(distance * 2);
-        const baseFare = rates.baseFare;
-        const surgeMultiplierValue = surge_multiplier || await calculateSurgePricing(pickup_location, vehicle_type);
+        let fareDetails = pricingData.vehicleOptions[0];
         
-        // Calculate fare components
-        const distanceFare = distance * rates.perKm;
-        const timeFare = estimatedTime * rates.perMin;
-        const baseEstimatedFare = baseFare + distanceFare + timeFare;
-        const estimatedFare = Math.round(baseEstimatedFare * surgeMultiplierValue);
+        // Apply promo code if provided
+        if (promo_code) {
+            fareDetails = await fareEstimationService.applyPromoCode(fareDetails, promo_code);
+        }
         
-        // Check for available drivers but don't assign yet
-        const nearbyDrivers = await findNearbyDriversWithMatching(pickup_location, vehicle_type, req.user.id);
-
         // Create ride request with 'searching' status
         const rideData = {
             user_id: req.user.id,
             pickup_location,
             drop_location,
-            distance,
-            estimatedFare,
-            baseFare,
-            surgeMultiplier: surgeMultiplierValue,
-            vehicle_type: vehicle_type || 'economy',
+            distance: pricingData.tripDetails.distance,
+            fare: fareDetails.promoApplied ? fareDetails.promoApplied.finalFare : fareDetails.totalFare,
+            estimatedFare: fareDetails.totalFare,
+            vehicle_type,
             payment_method,
             status: 'searching',
-            estimatedTime,
-            fareBreakdown: {
-                baseFare,
-                distanceFare: Math.round(distanceFare),
-                timeFare: Math.round(timeFare),
-                surgeAmount: Math.round(estimatedFare - baseEstimatedFare)
-            }
+            estimatedTime: pricingData.tripDetails.estimatedTime,
+            fareBreakdown: fareDetails.fareBreakdown,
+            surgeMultiplier: fareDetails.surgeMultiplier,
+            promoApplied: fareDetails.promoApplied || null,
+            ride_phases: {
+                searching_started: new Date()
+            },
+            search_timeout: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes timeout
         };
         
-        // If preferred driver is specified, add to ride data
         if (preferred_driver_id) {
             rideData.preferred_driver_id = preferred_driver_id;
         }
         
         const ride = await Ride.create(rideData);
+        console.log(`✅ Ride created with status: ${ride.status}`);
 
-        // Broadcast to available drivers immediately
+        // Use advanced driver matching
         const io = req.app.get('io');
         if (io) {
+            // Initialize trip tracking service if not already done
+            if (!tripTrackingService) {
+                tripTrackingService = new TripTrackingService(io);
+                // Store reference in app for other controllers
+                req.app.set('tripTrackingService', tripTrackingService);
+            }
+            
+            // Broadcast to optimal drivers
+            console.log(`📡 Broadcasting ride ${ride._id} to ${vehicle_type} drivers`);
+            const matchingResult = await driverMatchingService.broadcastRideRequest(
+                ride._id, 
+                vehicle_type, 
+                pickup_location, 
+                drop_location, 
+                fareDetails.totalFare, 
+                io
+            );
+            console.log(`📡 Broadcast result: ${matchingResult.driversNotified} drivers notified`);
+            
             // Notify admin
             io.emit('admin_notification', {
                 type: 'new_ride_request',
                 rideId: ride._id,
-                message: `New ride request from ${req.user.name}`,
+                message: `New ${vehicle_type} ride request from ${req.user.name}`,
                 user: req.user.name,
                 pickup: pickup_location.address,
                 destination: drop_location.address,
-                estimatedFare: estimatedFare,
+                estimatedFare: fareDetails.totalFare,
+                driversNotified: matchingResult.driversNotified,
                 timestamp: new Date()
             });
-            
-            // Broadcast to matching drivers
-            broadcastToAvailableDrivers(ride._id, vehicle_type, pickup_location, drop_location, estimatedFare, io);
         }
 
         console.log('=== RIDE REQUEST COMPLETE ===');
@@ -137,17 +157,15 @@ exports.requestRide = async (req, res) => {
             success: true,
             hasActiveRide: false,
             ride,
-            estimatedFare: estimatedFare,
-            estimatedDistance: distance,
-            message: `Searching for available ${vehicle_type} drivers. We'll notify you when a driver accepts.`,
-            waitingForAccept: true,
+            pricingDetails: pricingData,
+            finalFare: fareDetails.promoApplied ? fareDetails.promoApplied.finalFare : fareDetails.totalFare,
+            message: `Searching for available ${vehicle_type} drivers nearby...`,
+            searchTimeout: 300, // 5 minutes
             requiresDriverAcceptance: true,
-            availableDrivers: nearbyDrivers.length,
-            vehicleTypeRequested: vehicle_type
+            status: 'searching' // Explicitly show searching status
         });
     } catch (err) {
         console.error('❌ RIDE REQUEST ERROR:', err);
-        console.error('Error stack:', err.stack);
         res.status(400).json({ success: false, error: err.message });
     }
 };
@@ -338,12 +356,12 @@ exports.calculateFare = async (req, res) => {
         
         // Vehicle type rates (consistent with main calculation)
         const vehicleRates = {
-            economy: { baseFare: 50, perKm: 15, perMin: 2 },
-            sedan: { baseFare: 70, perKm: 20, perMin: 2.5 },
-            suv: { baseFare: 90, perKm: 25, perMin: 3 }
+            bike: { baseFare: 20, perKm: 8, perMin: 1.5 },
+            sedan: { baseFare: 50, perKm: 15, perMin: 2.5 },
+            suv: { baseFare: 80, perKm: 25, perMin: 3 }
         };
         
-        const rates = vehicleRates[vehicle_type] || vehicleRates.economy;
+        const rates = vehicleRates[vehicle_type] || vehicleRates.sedan;
         const fare = rates.baseFare + (distance * rates.perKm);
         
         res.json({
@@ -362,42 +380,70 @@ exports.calculateFare = async (req, res) => {
 exports.startTrip = async (req, res) => {
     try {
         const { rideId } = req.params;
-        const { driverLocation } = req.body;
+        console.log('Starting trip for ride:', rideId);
         
         const ride = await Ride.findById(rideId);
         if (!ride) {
+            console.log('Ride not found:', rideId);
             return res.status(404).json({ success: false, error: 'Ride not found' });
         }
         
-        if (ride.status !== 'accepted') {
-            return res.status(400).json({ success: false, error: 'Ride must be accepted to start trip' });
+        console.log('Current ride status:', ride.status);
+        console.log('Driver ID from ride:', ride.driver_id);
+        console.log('Current user ID:', req.user.id);
+        
+        // Check if driver is authorized
+        if (ride.driver_id && ride.driver_id.toString() !== req.user.id) {
+            console.log('Unauthorized driver attempting to start ride');
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
         }
         
-        // Update ride status
+        if (ride.status !== 'accepted' && ride.status !== 'driver_arrived') {
+            console.log('Invalid ride status for starting trip:', ride.status);
+            return res.status(400).json({ 
+                success: false, 
+                error: `Ride must be accepted or driver arrived to start trip. Current status: ${ride.status}` 
+            });
+        }
+        
+        // Update ride status to in_progress
         ride.status = 'in_progress';
+        ride.timestamps = ride.timestamps || {};
         ride.timestamps.started_at = new Date();
         await ride.save();
         
-        // Tracking is now handled via socket.io
+        console.log('Ride status updated to in_progress');
         
-        // Notify user that trip has started
+        // Use trip tracking service to start trip
+        if (tripTrackingService) {
+            await tripTrackingService.startTripTracking(rideId);
+            console.log('Trip tracking started');
+        }
+        
+        const updatedRide = await Ride.findById(rideId)
+            .populate('user_id driver_id', 'name phone');
+        
+        // Notify user that ride has started
         const io = req.app.get('io');
-        if (io) {
+        if (io && ride.user_id) {
             io.emit(`user_notification_${ride.user_id}`, {
-                type: 'trip_started',
+                type: 'ride_started',
                 rideId: rideId,
-                message: 'Your trip has started. The driver is on the way to your destination.',
+                message: 'Your ride has started. Driver is on the way to your destination.',
                 timestamp: new Date()
             });
         }
         
+        console.log('Trip started successfully for ride:', rideId);
         res.json({
             success: true,
             message: 'Trip started successfully',
-            ride,
-            trackingEnabled: true
+            ride: updatedRide,
+            trackingEnabled: true,
+            nextStep: 'Navigate to destination and complete trip'
         });
     } catch (err) {
+        console.error('Start trip error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 };
@@ -532,233 +578,139 @@ exports.getRideRequests = async (req, res) => {
 
 exports.acceptRideRequest = async (req, res) => {
     try {
-        console.log('=== ACCEPT RIDE REQUEST ENDPOINT HIT ===');
-        console.log('Timestamp:', new Date().toISOString());
-        console.log('Method:', req.method);
-        console.log('URL:', req.url);
-        console.log('Params:', req.params);
-        console.log('Headers:', req.headers.authorization ? 'Bearer token present' : 'No auth header');
-        console.log('User:', { id: req.user?.id, role: req.user?.role, name: req.user?.name });
-        
-        if (!req.user) {
-            console.log('❌ No user in request');
-            return res.status(401).json({ success: false, error: 'Authentication required' });
-        }
-        
         const rideId = req.params.id;
         const driverId = req.user.id;
         
-        console.log('Accepting ride:', rideId, 'by driver:', driverId);
+        console.log('Driver accepting ride:', rideId);
         
-        // Validate ObjectId format
-        if (!rideId || !rideId.match(/^[0-9a-fA-F]{24}$/)) {
-            console.log('❌ Invalid ride ID format:', rideId);
-            return res.status(400).json({ success: false, error: 'Invalid ride ID format' });
-        }
+        // Use advanced matching service to handle acceptance
+        const result = await driverMatchingService.handleDriverResponse(rideId, driverId, 'accept');
         
-        // Validate driver ID format
-        if (!driverId || !driverId.match(/^[0-9a-fA-F]{24}$/)) {
-            console.log('❌ Invalid driver ID format:', driverId);
-            return res.status(400).json({ success: false, error: 'Invalid driver ID format' });
-        }
-        
-        console.log('✅ ID validation passed');
-        
-        console.log('🔍 Searching for ride in database...');
-        const ride = await Ride.findById(rideId);
-        if (!ride) {
-            console.log('❌ Ride not found:', rideId);
-            return res.status(404).json({ success: false, error: 'Ride not found' });
-        }
-        
-        console.log('✅ Found ride:', {
-            id: ride._id,
-            status: ride.status,
-            user_id: ride.user_id,
-            driver_id: ride.driver_id,
-            declined_by: ride.declined_by
-        });
-        
-        if (ride.status !== 'searching') {
-            console.log('❌ Ride status check failed:', {
-                rideId,
-                currentStatus: ride.status,
-                expectedStatus: 'searching',
-                driverId,
-                declinedBy: ride.declined_by
-            });
+        if (!result.success) {
             return res.status(400).json({ 
                 success: false, 
-                error: `Ride status is '${ride.status}', expected 'searching'` 
+                error: result.reason 
             });
         }
         
-        console.log('✅ Ride status check passed');
-        
-        // Check if driver has already declined this ride
-        if (ride.declined_by && ride.declined_by.includes(driverId)) {
-            console.log('❌ Driver has already declined this ride:', { rideId, driverId });
-            return res.status(400).json({ 
-                success: false, 
-                error: 'You have already declined this ride request' 
-            });
-        }
-        
-        console.log('✅ Driver decline check passed');
+        // Get updated ride with driver info
+        const ride = await Ride.findById(rideId)
+            .populate('user_id', 'name phone')
+            .populate('driver_id', 'name phone rating driverInfo');
         
         // Generate OTP for ride verification
-        const otpData = generateOTPWithExpiry(10); // 10 minutes expiry
+        const otpData = generateOTPWithExpiry(10);
         
-        // Get driver information from Driver model
-        console.log('🔍 Searching for driver in database...');
-        const driver = await Driver.findById(driverId).select('name phone rating');
-        if (!driver) {
-            console.log('❌ Driver not found in Driver model:', driverId);
-            return res.status(404).json({ success: false, error: 'Driver not found' });
-        }
-        
-        console.log('✅ Found driver:', driver.name);
-        
-        // Calculate distance from driver to user
+        // Get driver location and calculate ETA
         const driverLocation = await getDriverCurrentLocation(driverId);
         const distanceFromUser = driverLocation ? 
             calculateDistance(
                 driverLocation.latitude, driverLocation.longitude,
                 ride.pickup_location.latitude, ride.pickup_location.longitude
-            ) : 2; // Default 2km if location not available
+            ) : 2;
         
-        // Calculate ETA (assuming average speed of 30 km/h)
-        const eta = Math.ceil((distanceFromUser / 30) * 60); // in minutes
+        const eta = Math.ceil((distanceFromUser / 30) * 60);
         
-        console.log('Distance from user:', distanceFromUser, 'ETA:', eta);
-        
-        ride.driver_id = driverId;
-        ride.status = 'accepted';
-        ride.timestamps.accepted_at = new Date();
-        ride.ride_phases.driver_accepted = new Date();
+        // Update ride with driver details and OTP
         ride.otp = otpData;
+        
+        // Debug driver info
+        console.log('Driver info for vehicle number:', {
+            driverInfo: ride.driver_id.driverInfo,
+            registrationNumber: ride.driver_id.driverInfo?.registrationNumber
+        });
+        
         ride.driver_info = {
-            name: driver.name,
-            phone: driver.phone,
-            vehicle_number: driver.driverInfo?.vehicleNumber || 'MH-12-AB-1234',
-            vehicle_model: driver.driverInfo?.vehicleModel || 'Sedan',
-            rating: driver.rating || 4.5,
+            name: ride.driver_id.name,
+            phone: ride.driver_id.phone,
+            vehicle_number: ride.driver_id.driverInfo?.registrationNumber || 'Not specified',
+            vehicle_model: ride.driver_id.driverInfo?.vehicleModel || ride.vehicle_type,
+            rating: ride.driver_id.rating || 4.5,
             distance_from_user: Math.round(distanceFromUser * 100) / 100,
             eta: eta,
-            photo: driver.profilePhoto || null
+            photo: ride.driver_id.profilePhoto || null
         };
         
-        // Initialize tracking
-        ride.tracking = {
-            isActive: true,
-            currentLocation: driverLocation ? {
-                latitude: driverLocation.latitude,
-                longitude: driverLocation.longitude,
-                address: driverLocation.address || 'Driver location',
-                timestamp: new Date()
-            } : null,
-            eta: eta,
-            progress: 0,
-            lastUpdate: new Date()
-        };
-        
-        console.log('💾 Saving ride with driver_id:', driverId);
         await ride.save();
-        console.log('✅ Ride saved successfully');
         
-        const populatedRide = await Ride.findById(rideId)
-            .populate('user_id', 'name phone')
-            .populate('driver_id', 'name phone rating');
+        // Update driver status to busy
+        await Driver.findByIdAndUpdate(driverId, { status: 'busy' });
         
-        console.log('Populated ride:', populatedRide);
-        
-        // Notify user that ride was accepted
+        // Start trip tracking
         const io = req.app.get('io');
+        if (io && tripTrackingService && driverLocation) {
+            await tripTrackingService.startDriverTracking(
+                rideId,
+                driverLocation,
+                ride.pickup_location
+            );
+        }
+        
+        // Send notifications
         if (io) {
-            io.emit(`user_notification_${ride.user_id}`, {
+            // Notify user
+            io.emit(`user_notification_${ride.user_id._id}`, {
                 type: 'ride_accepted',
-                rideId: rideId,
-                message: `Your ride has been accepted by ${req.user.name}`,
-                driver: {
-                    name: req.user.name,
-                    phone: req.user.phone,
-                    rating: req.user.rating
-                },
-                ride: populatedRide,
+                rideId,
+                message: `${ride.driver_id.name} is coming to pick you up`,
+                driver: ride.driver_info,
+                otp: otpData.code,
+                eta: `${eta} min`,
                 timestamp: new Date()
             });
             
-            // Notify all drivers that this ride is no longer available
+            // Notify other drivers
             io.emit('ride_no_longer_available', {
-                rideId: rideId,
-                message: 'Ride has been accepted by another driver',
-                acceptedBy: req.user.name,
+                rideId,
+                message: 'This ride has been accepted by another driver',
                 timestamp: new Date()
             });
             
-            // Start Uber-like tracking service
-            if (io.trackingService && driverLocation) {
-                io.trackingService.startDriverTracking(
-                    rideId,
-                    driverLocation,
-                    populatedRide.pickup_location
-                );
-            }
-            
-            // Notify admin about ride acceptance
+            // Notify admin
             io.emit('admin_notification', {
                 type: 'ride_accepted',
-                rideId: rideId,
-                message: `Ride accepted by driver ${req.user.name}`,
-                user: populatedRide.user_id.name,
-                driver: req.user.name,
+                rideId,
+                message: `Ride accepted by ${ride.driver_id.name}`,
+                user: ride.user_id.name,
+                driver: ride.driver_id.name,
+                eta,
                 timestamp: new Date()
             });
         }
         
-        console.log('✅ Sending success response with ride:', populatedRide._id);
-        res.json({ success: true, ride: populatedRide, message: 'Ride accepted successfully' });
+        res.json({ 
+            success: true, 
+            ride, 
+            message: 'Ride accepted successfully',
+            nextStep: 'Navigate to pickup location and verify OTP with passenger'
+        });
     } catch (err) {
-        console.error('❌ ACCEPT RIDE ERROR:', err);
-        console.error('Error stack:', err.stack);
-        console.error('Request params:', req.params);
-        console.error('User info:', { id: req.user?.id, role: req.user?.role });
+        console.error('Accept ride error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 };
 
-// Get all active trips for admin monitoring
-exports.getActiveTrips = async (req, res) => {
+// Get God's-eye view for admin monitoring
+exports.getGodViewData = async (req, res) => {
     try {
-        const activeTrips = await Ride.find({ 
-            status: { $in: ['accepted', 'in_progress'] }
-        })
-        .populate('user_id', 'name phone')
-        .populate('driver_id', 'name phone rating')
-        .sort({ 'timestamps.started_at': -1 });
+        let godViewData = { totalActiveRides: 0, rides: [], timestamp: new Date() };
         
-        // Ensure proper population by checking both user_id and driver_id fields
-        const tripsWithNames = activeTrips.map(trip => {
-            const tripObj = trip.toObject();
-            
-            // Handle user name
-            if (tripObj.user_id && typeof tripObj.user_id === 'object') {
-                tripObj.userName = tripObj.user_id.name;
-            }
-            
-            // Handle driver name
-            if (tripObj.driver_id && typeof tripObj.driver_id === 'object') {
-                tripObj.driverName = tripObj.driver_id.name;
-            }
-            
-            return tripObj;
+        if (tripTrackingService) {
+            godViewData = await tripTrackingService.getGodViewData();
+        }
+        
+        res.json({ 
+            success: true, 
+            ...godViewData,
+            trackingServiceActive: !!tripTrackingService
         });
-        
-        res.json({ success: true, trips: tripsWithNames });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 };
+
+// Legacy endpoint for backward compatibility
+exports.getActiveTrips = exports.getGodViewData;
 
 // Verify OTP and start ride (driver only)
 exports.verifyOTPAndStartRide = async (req, res) => {
@@ -855,6 +807,9 @@ exports.completeRideWithPayment = async (req, res) => {
         ride.timestamps.completed_at = new Date();
         await ride.save();
         
+        // Set driver back to available
+        await Driver.findByIdAndUpdate(driverId, { status: 'available' });
+        
         // Tracking is now handled via socket.io
         
         // Clear location update interval
@@ -915,38 +870,25 @@ exports.completeRide = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Ride must be in progress to complete' });
         }
         
-        // Calculate final fare based on actual trip
-        const actualDistance = ride.tracking?.actualDistance || ride.distance;
-        const actualTime = ride.timestamps.started_at ? 
-            Math.round((new Date() - new Date(ride.timestamps.started_at)) / (1000 * 60)) : 
-            ride.estimatedTime;
-        
-        const vehicleRates = {
-            economy: { baseFare: 50, perKm: 15, perMin: 2 },
-            sedan: { baseFare: 70, perKm: 20, perMin: 2.5 },
-            suv: { baseFare: 90, perKm: 25, perMin: 3 }
-        };
-        
-        const rates = vehicleRates[ride.vehicle_type] || vehicleRates.economy;
-        const finalFare = Math.round(
-            (rates.baseFare + (actualDistance * rates.perKm) + (actualTime * rates.perMin)) * 
-            ride.surgeMultiplier
-        );
-        
+        // Update ride status to completed
         ride.status = 'completed';
-        ride.actualFare = finalFare;
-        ride.actualDistance = actualDistance;
-        ride.actualTime = actualTime;
+        ride.timestamps = ride.timestamps || {};
         ride.timestamps.completed_at = new Date();
         await ride.save();
         
-        // Tracking is now handled via socket.io
-        
-        // Clear location update interval
-        if (global.locationIntervals && global.locationIntervals[rideId]) {
-            clearInterval(global.locationIntervals[rideId]);
-            delete global.locationIntervals[rideId];
+        // Use trip tracking service to complete trip
+        if (tripTrackingService) {
+            await tripTrackingService.completeTrip(rideId);
         }
+        
+        // Set driver back to available, increment completed rides, and update earnings
+        await Driver.findByIdAndUpdate(driverId, { 
+            status: 'available',
+            $inc: { 
+                completedRides: 1,
+                'earnings.total': ride.fare || 0
+            }
+        });
         
         // Auto-generate invoice
         try {
@@ -955,25 +897,28 @@ exports.completeRide = async (req, res) => {
             console.error('Invoice generation failed for ride:', rideId, 'Error:', invoiceError.message);
         }
         
-        const populatedRide = await Ride.findById(rideId)
+        const completedRide = await Ride.findById(rideId)
             .populate('user_id', 'name phone')
             .populate('driver_id', 'name phone rating');
         
-        // Notify user that ride is completed and payment is required
+        // Notify user that ride is completed
         const io = req.app.get('io');
-        if (io) {
+        if (io && ride.user_id) {
             io.emit(`user_notification_${ride.user_id}`, {
                 type: 'ride_completed',
                 rideId: rideId,
-                message: 'Your ride has been completed. Please proceed with payment.',
-                paymentMethod: ride.payment_method,
-                fare: ride.fare,
-                ride: populatedRide,
+                message: 'Your ride has been completed. Thank you for choosing our service!',
+                ride: completedRide,
                 timestamp: new Date()
             });
         }
         
-        res.json({ success: true, ride: populatedRide, message: 'Ride completed successfully' });
+        res.json({ 
+            success: true, 
+            ride: completedRide, 
+            message: 'Ride completed successfully',
+            nextStep: 'Both parties can now rate each other'
+        });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -982,8 +927,6 @@ exports.completeRide = async (req, res) => {
 // Get user's rides (includes ALL statuses including 'requested')
 exports.getUserRides = async (req, res) => {
     try {
-        console.log('Getting rides for user:', req.user.id, 'role:', req.user.role);
-        
         let query = {};
         if (req.user.role === 'admin') {
             // Admin can see all rides
@@ -1001,8 +944,6 @@ exports.getUserRides = async (req, res) => {
             .populate('user_id', 'name phone')
             .sort({ createdAt: -1 });
         
-        console.log(`Found ${rides.length} rides for ${req.user.role} ${req.user.id}`);
-        
         res.json({ success: true, rides });
     } catch (err) {
         console.error('Get user rides error:', err);
@@ -1016,6 +957,11 @@ exports.getDriverRides = async (req, res) => {
         const rides = await Ride.find({ driver_id: req.user.id })
             .populate('user_id', 'name phone rating')
             .sort({ createdAt: -1 });
+        
+        console.log(`Found ${rides.length} rides for driver ${req.user.id}`);
+        rides.forEach(ride => {
+            console.log(`  - Ride ${ride._id}: status=${ride.status}`);
+        });
         
         res.json({ success: true, rides });
     } catch (err) {
@@ -1152,57 +1098,106 @@ exports.findDriversInZone = async (req, res) => {
     }
 };
 
-// Dedicated fare estimation endpoint (no ride creation)
-exports.estimateFare = async (req, res) => {
+// Get upfront pricing with multiple vehicle options
+exports.getUpfrontPricing = async (req, res) => {
     try {
-        const { pickup_location, drop_location, vehicle_type } = req.body;
+        const { pickup_location, drop_location, vehicle_types } = req.body;
         
-        if (!pickup_location || !drop_location || !vehicle_type) {
+        if (!pickup_location || !drop_location) {
             return res.status(400).json({ 
                 success: false, 
-                error: 'Pickup location, drop location, and vehicle type are required' 
+                error: 'Pickup and drop locations are required' 
             });
         }
         
-        const distance = calculateDistance(
-            pickup_location.latitude, 
-            pickup_location.longitude,
-            drop_location.latitude, 
-            drop_location.longitude
+        const pricingData = await fareEstimationService.getUpfrontPricing(
+            pickup_location, 
+            drop_location, 
+            vehicle_types
         );
-        
-        const vehicleRates = {
-            economy: { baseFare: 50, perKm: 15, perMin: 2 },
-            sedan: { baseFare: 70, perKm: 20, perMin: 2.5 },
-            suv: { baseFare: 90, perKm: 25, perMin: 3 }
-        };
-        
-        const rates = vehicleRates[vehicle_type];
-        const estimatedTime = Math.round(distance * 2);
-        
-        const baseFare = rates.baseFare;
-        const distanceFare = distance * rates.perKm;
-        const timeFare = estimatedTime * rates.perMin;
-        const baseEstimatedFare = Math.round(baseFare + distanceFare + timeFare);
-        
-        const surgeMultiplier = await calculateSurgePricing(pickup_location, vehicle_type);
-        const finalFare = Math.round(baseEstimatedFare * surgeMultiplier);
         
         res.json({
             success: true,
-            distance: parseFloat(distance.toFixed(2)),
-            estimatedFare: finalFare,
-            estimatedTime,
-            surgeMultiplier: parseFloat(surgeMultiplier.toFixed(2)),
-            fareBreakdown: {
-                baseFare,
-                distanceFare: Math.round(distanceFare),
-                timeFare: Math.round(timeFare),
-                surgeAmount: Math.round(finalFare - baseEstimatedFare)
-            },
-            isEstimate: true,
-            message: 'This is an estimate. Final fare may vary based on actual trip.'
+            ...pricingData
         });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Apply promo code to fare estimate
+exports.applyPromoCode = async (req, res) => {
+    try {
+        const { pickup_location, drop_location, vehicle_type, promo_code } = req.body;
+        
+        const pricingData = await fareEstimationService.getUpfrontPricing(
+            pickup_location, 
+            drop_location, 
+            [vehicle_type]
+        );
+        
+        const vehicleOption = pricingData.vehicleOptions[0];
+        const promoResult = await fareEstimationService.applyPromoCode(vehicleOption, promo_code);
+        
+        res.json({
+            success: true,
+            originalFare: vehicleOption.totalFare,
+            ...promoResult
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Legacy fare estimation endpoint
+exports.estimateFare = async (req, res) => {
+    return exports.getUpfrontPricing(req, res);
+};
+
+// Submit rating and feedback
+exports.submitRating = async (req, res) => {
+    try {
+        const { rideId } = req.params;
+        const { rating, feedback, categories, tip, compliments } = req.body;
+        const raterId = req.user.id;
+        const raterType = req.user.role === 'driver' ? 'driver' : 'user';
+        
+        const result = await ratingFeedbackService.submitRating(
+            rideId, 
+            raterId, 
+            raterType, 
+            { rating, feedback, categories, tip, compliments }
+        );
+        
+        res.json(result);
+    } catch (err) {
+        res.status(400).json({ success: false, error: err.message });
+    }
+};
+
+// Check if user can rate a ride
+exports.canRate = async (req, res) => {
+    try {
+        const { rideId } = req.params;
+        const userId = req.user.id;
+        
+        const result = await ratingFeedbackService.canRate(rideId, userId);
+        
+        res.json({ success: true, ...result });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Get rating summary for user/driver
+exports.getRatingSummary = async (req, res) => {
+    try {
+        const userId = req.params.userId || req.user.id;
+        const userType = req.user.role === 'driver' ? 'driver' : 'user';
+        
+        const summary = await ratingFeedbackService.getRatingsSummary(userId, userType);
+        
+        res.json({ success: true, summary });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -1210,37 +1205,10 @@ exports.estimateFare = async (req, res) => {
 
 // Legacy calculate fare endpoint (kept for backward compatibility)
 exports.calculateFare = async (req, res) => {
-    return exports.estimateFare(req, res);
+    return exports.getUpfrontPricing(req, res);
 };
 
-// Broadcast ride request to available drivers
-function broadcastToAvailableDrivers(rideId, vehicleType, pickupLocation, dropLocation, estimatedFare, io) {
-    Driver.find({
-        status: 'available',
-        'driverInfo.isVerified': true,
-        'driverInfo.vehicleType': vehicleType
-    }).select('_id name driverInfo')
-    .then(matchingDrivers => {
-        console.log(`Broadcasting to ${matchingDrivers.length} available ${vehicleType} drivers`);
-        
-        matchingDrivers.forEach(driver => {
-            io.emit(`driver_notification_${driver._id}`, {
-                type: 'ride_request',
-                rideId: rideId,
-                message: `New ${vehicleType} ride request`,
-                pickup: pickupLocation.address,
-                destination: dropLocation.address,
-                estimatedFare: estimatedFare,
-                vehicle_type: vehicleType,
-                requiresAcceptance: true,
-                timestamp: new Date()
-            });
-        });
-    })
-    .catch(error => {
-        console.error('Error broadcasting to drivers:', error);
-    });
-}
+// Legacy broadcast function removed - now using DriverMatchingService.broadcastRideRequest
 
 // Calculate surge pricing based on demand and time
 async function calculateSurgePricing(pickupLocation, vehicleType) {
@@ -1400,16 +1368,136 @@ exports.declineRideRequest = async (req, res) => {
         const rideId = req.params.id;
         const driverId = req.user.id;
         
-        // Add driver to declined list to prevent showing the same request again
-        await Ride.findByIdAndUpdate(rideId, {
-            $addToSet: { declined_by: driverId }
-        });
+        // Use matching service to handle decline
+        const result = await driverMatchingService.handleDriverResponse(rideId, driverId, 'decline');
         
         res.json({ 
-            success: true, 
-            message: 'Ride request declined' 
+            success: result.success, 
+            message: result.message 
         });
     } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Driver rate user after ride completion
+exports.rateUser = async (req, res) => {
+    try {
+        const { rideId } = req.params;
+        const { rating, feedback } = req.body;
+        const driverId = req.user.id;
+        
+        const ride = await Ride.findById(rideId);
+        if (!ride) {
+            return res.status(404).json({ success: false, error: 'Ride not found' });
+        }
+        
+        if (ride.driver_id.toString() !== driverId) {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        }
+        
+        if (ride.status !== 'completed') {
+            return res.status(400).json({ success: false, error: 'Ride must be completed to rate' });
+        }
+        
+        // Update ride with user rating from driver
+        ride.user_rating = rating;
+        ride.user_feedback = feedback;
+        await ride.save();
+        
+        // Update user's average rating
+        const User = require('../models/User');
+        const userRides = await Ride.find({ 
+            user_id: ride.user_id, 
+            status: 'completed',
+            user_rating: { $exists: true, $ne: null }
+        });
+        
+        if (userRides.length > 0) {
+            const avgRating = userRides.reduce((sum, r) => sum + r.user_rating, 0) / userRides.length;
+            await User.findByIdAndUpdate(ride.user_id, { 
+                rating: Math.round(avgRating * 10) / 10 // Round to 1 decimal place
+            });
+            console.log(`Updated user ${ride.user_id} rating to ${avgRating}`);
+        }
+        
+        res.json({ success: true, message: 'User rating submitted successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Regenerate OTP for ride (driver only)
+exports.regenerateOTP = async (req, res) => {
+    try {
+        console.log('Regenerate OTP request:', {
+            rideId: req.params.rideId,
+            driverId: req.user.id,
+            userRole: req.user.role
+        });
+        
+        const { rideId } = req.params;
+        const driverId = req.user.id;
+        
+        if (!rideId) {
+            console.log('No ride ID provided');
+            return res.status(400).json({ success: false, error: 'Ride ID is required' });
+        }
+        
+        const ride = await Ride.findById(rideId);
+        if (!ride) {
+            console.log('Ride not found:', rideId);
+            return res.status(404).json({ success: false, error: 'Ride not found' });
+        }
+        
+        console.log('Found ride:', {
+            id: ride._id,
+            status: ride.status,
+            driverId: ride.driver_id?.toString(),
+            currentDriverId: driverId
+        });
+        
+        if (!ride.driver_id || ride.driver_id.toString() !== driverId) {
+            console.log('Unauthorized driver access');
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        }
+        
+        if (ride.status !== 'accepted') {
+            console.log('Invalid ride status for OTP regeneration:', ride.status);
+            return res.status(400).json({ success: false, error: 'Can only regenerate OTP for accepted rides' });
+        }
+        
+        // Generate new OTP
+        const newOtpData = generateOTPWithExpiry(10);
+        console.log('Generated new OTP:', newOtpData.code);
+        
+        ride.otp = newOtpData;
+        await ride.save();
+        console.log('Saved new OTP to ride');
+        
+        // Notify user about new OTP
+        const io = req.app.get('io');
+        if (io) {
+            console.log('Sending OTP notification to user:', ride.user_id);
+            io.emit(`user_notification_${ride.user_id}`, {
+                type: 'otp_regenerated',
+                rideId,
+                message: 'Driver has requested a new OTP',
+                newOtp: newOtpData.code,
+                timestamp: new Date()
+            });
+        } else {
+            console.log('Socket.io not available');
+        }
+        
+        console.log('OTP regeneration successful');
+        res.json({
+            success: true,
+            message: 'New OTP generated and sent to passenger',
+            newOtp: newOtpData.code
+        });
+    } catch (err) {
+        console.error('Regenerate OTP error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 };

@@ -37,6 +37,22 @@ exports.register = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
         
         if (role === 'driver') {
+            // Validate vehicle type
+            if (driverInfo && driverInfo.vehicleType && !['bike', 'sedan', 'suv'].includes(driverInfo.vehicleType)) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'Invalid vehicle type. Must be one of: bike, sedan, suv' 
+                });
+            }
+            
+            // Validate registration number
+            if (!driverInfo || !driverInfo.registrationNumber) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'Vehicle registration number is required for drivers' 
+                });
+            }
+            
             const driverData = {
                 name,
                 email,
@@ -739,8 +755,6 @@ exports.submitVerificationDocuments = async (req, res) => {
         
         // Create verification request
         const verificationRequest = {
-            driverId,
-            documents: {},
             status: 'pending',
             submittedAt: new Date()
         };

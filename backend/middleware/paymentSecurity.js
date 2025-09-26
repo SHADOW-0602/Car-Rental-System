@@ -100,7 +100,10 @@ exports.verifyStripeWebhook = (req, res, next) => {
 exports.validatePaymentAmount = (req, res, next) => {
     const { amount } = req.body;
     
+    console.log('Payment amount validation - received amount:', amount, 'type:', typeof amount);
+    
     if (!amount || amount <= 0) {
+        console.log('Payment validation failed - invalid amount:', amount);
         return res.status(400).json({
             success: false,
             error: 'Invalid payment amount'
@@ -108,12 +111,14 @@ exports.validatePaymentAmount = (req, res, next) => {
     }
     
     if (amount > 50000) { // Max ₹50,000 per transaction
+        console.log('Payment validation failed - amount exceeds limit:', amount);
         return res.status(400).json({
             success: false,
             error: 'Payment amount exceeds maximum limit'
         });
     }
     
+    console.log('Payment amount validation passed');
     next();
 };
 

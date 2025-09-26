@@ -67,7 +67,7 @@ const userRoutes = require('./routes/userRoutes');
 const driverRoutes = require('./routes/driverRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
-const ratingRoutes = require('./routes/ratingRoutes');
+
 const locationRoutes = require('./routes/locationRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const chatRoutes = require('./routes/chatRoutes');
@@ -253,22 +253,21 @@ app.post('/api/admin/login', async (req, res) => {
 // API Routes
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/drivers', require('./routes/driverRoutes'));
+app.use('/api/driver', require('./routes/driverRoutes'));
 app.use('/api/vehicles', require('./routes/vehicleRoutes'));
 app.use('/api/rides', require('./routes/rideRoutes'));
 app.use('/api/payments', require('./routes/paymentRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/chat', require('./routes/chatRoutes'));
 app.use('/api/invoices', require('./routes/invoiceRoutes'));
-try {
-  app.use('/api/ratings', require('./routes/ratingRoutes'));
-} catch (error) {
-  console.warn('Rating routes could not be loaded:', error.message);
-}
+
 app.use('/api/setup', require('./routes/setupRoutes'));
 app.use('/api/security', require('./routes/securityRoutes'));
 app.use('/api/support', require('./routes/supportRoutes'));
 app.use('/api/location', require('./routes/locationRoutes'));
 app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/debug', require('./routes/debugRoutes'));
+app.use('/api/ratings', require('./routes/ratings'));
 
 // Admin routes
 try {
@@ -426,17 +425,7 @@ app.get('/api/admin/users', auth, role(['admin']), async (req, res) => {
   }
 });
 
-// Get driver stats for rating dashboard
-app.get('/api/ratings/driver-stats', auth, role(['driver']), async (req, res) => {
-  try {
-    const RatingService = require('./services/ratingService');
-    const ratingService = new RatingService();
-    const stats = await ratingService.getDriverDashboardStats(req.user.id);
-    res.json({ success: true, stats });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+
 
 
 
@@ -767,7 +756,7 @@ app.get('/api/admin/analytics', auth, role(['admin']), async (req, res) => {
 
 // Mount additional route modules
 app.use('/api/admin', adminRoutes);
-app.use('/api/ratings', ratingRoutes);
+
 app.use('/api/locations', locationRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/support', supportRoutes);

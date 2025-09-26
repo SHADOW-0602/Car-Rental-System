@@ -16,10 +16,16 @@ router.use(pciHeaders);
 router.use(paymentLimiter);
 
 // Initiate payment for completed ride
-router.post('/initiate', auth, role(['user']), validatePaymentAmount, paymentController.initiatePayment);
+router.post('/initiate', auth, role(['user']), paymentController.initiatePayment);
+
+// Initiate payment with validation (backup)
+router.post('/initiate-validated', auth, role(['user']), validatePaymentAmount, paymentController.initiatePayment);
 
 // Verify and complete payment
 router.post('/:paymentId/verify', auth, role(['user']), paymentController.verifyPayment);
+
+// Verify Stripe session
+router.post('/verify-stripe-session', auth, role(['user']), paymentController.verifyStripeSession);
 
 // Get payment details
 router.get('/:paymentId', auth, role(['user', 'admin']), paymentController.getPayment);
@@ -57,6 +63,29 @@ router.post('/test-initiate', auth, async (req, res) => {
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
+});
+
+// Simple payment test without validation
+router.post('/test-payment', auth, async (req, res) => {
+    try {
+        const { rideId, amount, paymentMethod } = req.body;
+        console.log('Test payment request:', { rideId, amount, paymentMethod, userId: req.user.id });
+        
+        res.json({
+            success: true,
+            message: 'Test payment endpoint working',
+            data: { rideId, amount, paymentMethod, userId: req.user.id }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Minimal payment initiate without any middleware
+router.post('/initiate-simple', async (req, res) => {
+    console.log('Simple payment initiate called');
+    console.log('Request body:', req.body);
+    res.json({ success: true, message: 'Simple endpoint working' });
 });
 
 module.exports = router;

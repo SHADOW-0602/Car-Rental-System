@@ -30,15 +30,16 @@ const driverSchema = new mongoose.Schema({
         thisMonth: { type: Number, default: 0 }
     },
     completedRides: { type: Number, default: 0 },
+    experience: { type: String }, // Direct experience field for easier access
     driverInfo: {
         licenseNumber: { type: String, required: true },
         licenseExpiry: { type: Date },
-        vehicleType: { type: String, required: true },
+        vehicleType: { type: String, enum: ['bike', 'sedan', 'suv'], required: true },
         vehicleMake: { type: String },
         vehicleModel: { type: String },
         vehicleYear: { type: Number },
         vehicleColor: { type: String },
-        registrationNumber: { type: String },
+        registrationNumber: { type: String, required: true },
         drivingExperience: { type: String },
         isVerified: { type: Boolean, default: false },
         documents: {

@@ -2,7 +2,7 @@ const socketIO = require('socket.io');
 const jwt = require('jsonwebtoken');
 const User = require('./models/User');
 const Driver = require('./models/Driver');
-const TrackingService = require('./services/TrackingService');
+const TripTrackingService = require('./services/trip-execution/tripTrackingService');
 
 function initSocket(server) {
     const io = socketIO(server, {
@@ -15,7 +15,7 @@ function initSocket(server) {
     });
 
     // Initialize tracking service
-    const trackingService = new TrackingService(io);
+    const trackingService = new TripTrackingService(io);
 
     // Socket authentication middleware
     io.use(async (socket, next) => {
@@ -33,6 +33,9 @@ function initSocket(server) {
             let user;
             if (decoded.role === 'driver') {
                 user = await Driver.findById(decoded.id).select('-password');
+            } else if (decoded.role === 'admin') {
+                const Admin = require('./models/Admin');
+                user = await Admin.findById(decoded.id).select('-password');
             } else {
                 user = await User.findById(decoded.id).select('-password');
             }
@@ -66,14 +69,13 @@ function initSocket(server) {
 
 
         // Live driver location updates
-        socket.on('updateLocation', data => {
+        socket.on('updateLocation', async data => {
             // Update tracking service if this is for an active ride
             if (data.rideId) {
-                trackingService.updateDriverLocation(data.rideId, {
-                    latitude: data.latitude,
-                    longitude: data.longitude,
-                    address: data.address
-                });
+                const trackingData = trackingService.activeTracking.get(data.rideId);
+                if (trackingData) {
+                    await trackingService.updateDriverLocation(data.rideId, trackingData);
+                }
             }
             
             // Broadcast to admin and other listeners
@@ -86,9 +88,13 @@ function initSocket(server) {
             console.log(`Socket ${socket.id} joined ride room: ${rideId}`);
             
             // Send current tracking status if available
-            const trackingStatus = trackingService.getTrackingStatus(rideId);
-            if (trackingStatus) {
-                socket.emit('trackingStatus', trackingStatus);
+            const trackingData = trackingService.activeTracking.get(rideId);
+            if (trackingData) {
+                socket.emit('trackingStatus', {
+                    rideId,
+                    phase: trackingData.phase,
+                    lastUpdate: trackingData.lastUpdate
+                });
             }
         });
         
@@ -99,9 +105,9 @@ function initSocket(server) {
         });
         
         // Start trip tracking (when driver picks up passenger)
-        socket.on('startTrip', (data) => {
-            const { rideId, pickupLocation, dropLocation } = data;
-            trackingService.startTripTracking(rideId, pickupLocation, dropLocation);
+        socket.on('startTrip', async (data) => {
+            const { rideId } = data;
+            await trackingService.startTripTracking(rideId);
             
             io.to(`ride_${rideId}`).emit('tripStarted', {
                 rideId,
@@ -111,13 +117,14 @@ function initSocket(server) {
         });
         
         // Complete trip
-        socket.on('completeTrip', (rideId) => {
-            trackingService.handleTripCompletion(rideId);
+        socket.on('completeTrip', async (rideId) => {
+            await trackingService.completeTrip(rideId);
         });
         
         // Emergency stop tracking
-        socket.on('emergencyStop', (rideId) => {
-            trackingService.emergencyStop(rideId);
+        socket.on('emergencyStop', async (data) => {
+            const { rideId, reason } = data;
+            await trackingService.emergencyStop(rideId, reason || 'Emergency stop requested');
         });
         
         // Join admin room for admin-specific updates

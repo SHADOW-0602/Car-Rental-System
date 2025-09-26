@@ -4122,3 +4122,22 @@ body {
   font-weight: 500;
   margin-top: 3px;
 }
+
+/* ===== LEAFLET MAP CONTROLS FIX ===== */
+/* Fix z-index for Leaflet map controls to prevent floating over footer */
+.leaflet-control-zoom {
+  z-index: 100 !important;
+}
+
+.leaflet-control-container {
+  z-index: 100 !important;
+}
+
+.leaflet-control {
+  z-index: 100 !important;
+}
+
+/* Ensure map container doesn't interfere with page flow */
+.leaflet-container {
+  z-index: 1 !important;
+}

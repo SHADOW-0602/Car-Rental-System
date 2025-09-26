@@ -16,6 +16,7 @@ export default function DriverRegister() {
     driverInfo: {
       licenseNumber: '',
       vehicleType: '',
+      registrationNumber: '',
       drivingExperience: ''
     }
   });
@@ -170,6 +171,19 @@ export default function DriverRegister() {
             </div>
             
             <div className="form-group">
+              <label className="form-label">Vehicle Registration Number</label>
+              <input
+                type="text"
+                name="driver.registrationNumber"
+                value={formData.driverInfo.registrationNumber}
+                onChange={handleChange}
+                placeholder="Enter vehicle registration number (e.g., DL-01-AB-1234)"
+                required
+                className="form-input"
+              />
+            </div>
+            
+            <div className="form-group">
               <label className="form-label">Vehicle Type</label>
               <select
                 name="driver.vehicleType"
@@ -179,10 +193,9 @@ export default function DriverRegister() {
                 className="form-input"
               >
                 <option value="">Select vehicle type</option>
+                <option value="bike">🏍️ Bike</option>
                 <option value="sedan">🚗 Sedan</option>
                 <option value="suv">🚙 SUV</option>
-                <option value="hatchback">🚘 Hatchback</option>
-                <option value="luxury">🏎️ Luxury</option>
               </select>
             </div>
             

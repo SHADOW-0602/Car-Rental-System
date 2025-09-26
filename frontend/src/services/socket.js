@@ -33,26 +33,17 @@ const socket = io(config.SOCKET_URL || 'http://localhost:5000', {
   reconnectionAttempts: 5,
   reconnectionDelay: 1000,
   autoConnect: false,
-  auth: {
-    token: getAuthToken()
+  auth: (cb) => {
+    const token = getAuthToken();
+    cb({ token });
   }
 });
 
-// Only connect if user is authenticated and token is valid
-const initializeSocket = async () => {
+// Only connect if user is authenticated
+const initializeSocket = () => {
   const token = getAuthToken();
-  if (token && await validateToken(token)) {
-    socket.auth.token = token;
+  if (token) {
     socket.connect();
-  } else if (token) {
-    // Invalid token, clear session
-    console.warn('Invalid token detected, clearing session');
-    try {
-      await fetch(`${config.API_URL}/users/cleanup-session`, { method: 'POST' });
-    } catch (error) {
-      console.warn('Failed to cleanup server session:', error);
-    }
-    CookieManager.clearUserSession();
   }
 };
 

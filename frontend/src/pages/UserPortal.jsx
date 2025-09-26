@@ -7,6 +7,152 @@ import Navbar from '../components/Navbar';
 import MapPicker from '../components/MapPicker';
 import api from '../services/api';
 
+// Vehicle Options Component
+const VehicleOptions = ({ pickupLocation, destinationLocation, distance, onVehicleSelect }) => {
+    const [vehicleOptions, setVehicleOptions] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        if (pickupLocation && destinationLocation) {
+            fetchVehicleOptions();
+        }
+    }, [pickupLocation, destinationLocation]);
+
+    const fetchVehicleOptions = async () => {
+        setLoading(true);
+        setError('');
+        
+        // Always show fallback options first to ensure all vehicle types are visible
+        const fallbackOptions = [
+            { 
+                vehicleType: 'bike', 
+                displayName: 'Bike', 
+                totalFare: Math.round(20 + (8 * (distance || 5))), 
+                estimatedArrival: 2,
+                description: 'Quick and affordable rides for solo travel'
+            },
+            { 
+                vehicleType: 'sedan', 
+                displayName: 'Sedan', 
+                totalFare: Math.round(50 + (15 * (distance || 5))), 
+                estimatedArrival: 5,
+                description: 'Comfortable cars for city travel'
+            },
+            { 
+                vehicleType: 'suv', 
+                displayName: 'SUV', 
+                totalFare: Math.round(80 + (25 * (distance || 5))), 
+                estimatedArrival: 7,
+                description: 'Spacious rides for groups and families'
+            }
+        ];
+        
+        setVehicleOptions(fallbackOptions);
+        
+        try {
+            const response = await api.post('/rides/upfront-pricing', {
+                pickup_location: pickupLocation,
+                drop_location: destinationLocation,
+                vehicle_types: ['bike', 'sedan', 'suv']
+            });
+
+            console.log('API Response:', response.data);
+            
+            if (response.data.success && response.data.vehicleOptions && response.data.vehicleOptions.length > 0) {
+                console.log('Using API pricing:', response.data.vehicleOptions);
+                setVehicleOptions(response.data.vehicleOptions);
+            } else {
+                console.log('Using fallback pricing');
+            }
+        } catch (err) {
+            console.error('Pricing API error:', err);
+            console.log('Using fallback pricing due to error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+                <div style={{ fontSize: '32px', marginBottom: '15px' }}>🚗</div>
+                <p>Getting vehicle options...</p>
+            </div>
+        );
+    }
+
+    if (error && vehicleOptions.length === 0) {
+        return (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#ef4444' }}>
+                <div style={{ fontSize: '32px', marginBottom: '15px' }}>⚠️</div>
+                <p>{error}</p>
+                <button onClick={fetchVehicleOptions} className="btn btn-primary" style={{ marginTop: '10px' }}>
+                    Retry
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <motion.div 
+            variants={{ hidden: { opacity: 0 }, visible: { opacity: 1 } }}
+            style={{ display: 'grid', gap: '15px' }}
+        >
+            {vehicleOptions.map((vehicle) => {
+                const vehicleIcons = {
+                    bike: '🏍️',
+                    sedan: '🚗', 
+                    suv: '🚙'
+                };
+                
+                return (
+                    <motion.div 
+                        key={vehicle.vehicleType} 
+                        whileHover={{ scale: 1.02, borderColor: '#667eea' }}
+                        whileTap={{ scale: 0.98 }}
+                        style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '20px',
+                            border: '2px solid #e2e8f0',
+                            borderRadius: '15px',
+                            cursor: 'pointer',
+                            transition: 'all 0.3s ease'
+                        }}
+                        onClick={() => onVehicleSelect({
+                            type: vehicle.vehicleType,
+                            name: vehicle.displayName || vehicle.vehicleType,
+                            estimatedFare: vehicle.totalFare,
+                            distance: distance,
+                            fareBreakdown: vehicle.fareBreakdown,
+                            surgeMultiplier: vehicle.surgeMultiplier
+                        })}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                            <div style={{ fontSize: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px' }}>
+                                {vehicleIcons[vehicle.vehicleType] || '🚗'}
+                            </div>
+                            <div>
+                                <h4 style={{ margin: '0 0 5px 0', color: '#2d3748' }}>{vehicle.displayName || vehicle.vehicleType}</h4>
+                                <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>{vehicle.estimatedArrival || 5} min away</p>
+                                {vehicle.surgeMultiplier > 1 && (
+                                    <p style={{ margin: 0, color: '#f59e0b', fontSize: '12px' }}>🔥 {vehicle.surgeMultiplier}x surge</p>
+                                )}
+                            </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '18px', fontWeight: '600', color: '#22c55e' }}>₹{vehicle.totalFare}</div>
+                            <div style={{ fontSize: '12px', color: '#64748b' }}>Upfront pricing</div>
+                        </div>
+                    </motion.div>
+                );
+            })}
+        </motion.div>
+    );
+};
+
 
 import { haversineDistance } from '../utils/distance';
 import { fadeIn, slideUp, staggerContainer, staggerItem, scaleIn } from '../animations/variants';
@@ -81,11 +227,54 @@ export default function UserPortal({ user: propUser }) {
     const [showChat, setShowChat] = useState(false);
     const [searchingDriver, setSearchingDriver] = useState(false);
     const [searchProgress, setSearchProgress] = useState(0);
+    const [selectedRideDetails, setSelectedRideDetails] = useState(null);
+    const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+    const [invoiceData, setInvoiceData] = useState(null);
+    const [showRatingModal, setShowRatingModal] = useState(false);
+    const [ratingData, setRatingData] = useState({ ride: null, rating: 5, comment: '' });
 
     // Fetch ride history and set up live updates
     useEffect(() => {
         if (user) {
             fetchRideHistory();
+            
+            // Check for Stripe payment return
+            const stripePaymentAttempt = sessionStorage.getItem('stripe_payment_attempt');
+            if (stripePaymentAttempt) {
+                console.log('User returned from Stripe payment, checking status...');
+                sessionStorage.removeItem('stripe_payment_attempt');
+                // Refresh ride history to get updated payment status without showing notifications
+                setTimeout(() => {
+                    fetchRideHistory();
+                }, 1000);
+            }
+            
+            // Set up socket for real-time updates
+            const socket = new WebSocket(`ws://localhost:5000`);
+            
+            // Listen for ride status updates
+            const handleRideUpdates = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'otp_regenerated' && rideDetails && data.rideId === rideDetails._id) {
+                    setRideDetails(prev => ({
+                        ...prev,
+                        otp: { code: data.newOtp }
+                    }));
+                    alert(`New OTP: ${data.newOtp}\nShare this with your driver to start the ride.`);
+                } else if (data.type === 'ride_started' && rideDetails && data.rideId === rideDetails._id) {
+                    // Update ride status to in_progress
+                    setRideDetails(prev => ({
+                        ...prev,
+                        status: 'in_progress'
+                    }));
+                    // Refresh ride history to get updated status
+                    fetchRideHistory();
+                }
+            };
+            
+            if (socket) {
+                socket.addEventListener('message', handleRideUpdates);
+            }
             
             // Set up polling for live ride updates
             const rideUpdateInterval = setInterval(() => {
@@ -94,7 +283,13 @@ export default function UserPortal({ user: propUser }) {
                 }
             }, 15000); // Update every 15 seconds
             
-            return () => clearInterval(rideUpdateInterval);
+            return () => {
+                clearInterval(rideUpdateInterval);
+                if (socket) {
+                    socket.removeEventListener('message', handleRideUpdates);
+                    socket.close();
+                }
+            };
         }
     }, [user, rideDetails]);
     
@@ -111,7 +306,7 @@ export default function UserPortal({ user: propUser }) {
 
     const fetchRideHistory = async () => {
         try {
-            const response = await api.get('/rides/user');
+            const response = await api.get('/rides/mine');
             if (response.data.success) {
                 setRideHistory(response.data.rides);
                 trackOperation({
@@ -154,8 +349,8 @@ export default function UserPortal({ user: propUser }) {
             type: 'VEHICLE_SELECTED',
             details: { vehicleType: vehicle.type, estimatedFare: vehicle.estimatedFare, distance: vehicle.distance }
         });
-        // Skip payment step and go directly to searching like Uber
-        handleRideRequest(vehicle, 'cash'); // Default to cash, can be changed later
+        // Show payment selection step instead of auto-booking
+        setBookingStep('payment');
     };
 
     const handleRideRequest = async (vehicle, paymentMethod = 'cash') => {
@@ -270,6 +465,55 @@ export default function UserPortal({ user: propUser }) {
         setDistance(0);
         setSearchingDriver(false);
         setSearchProgress(0);
+        setSelectedRideDetails(null);
+    };
+
+    const handleRideCardClick = (ride) => {
+        if (ride.status === 'searching') {
+            // Continue searching for this ride
+            setActiveTab('book');
+            setRideDetails(ride);
+            setSelectedVehicle({ type: ride.vehicle_type, estimatedFare: ride.fare });
+            setPickupLocation({
+                address: ride.pickup_location?.address,
+                latitude: ride.pickup_location?.latitude,
+                longitude: ride.pickup_location?.longitude
+            });
+            setDestinationLocation({
+                address: ride.drop_location?.address,
+                latitude: ride.drop_location?.latitude,
+                longitude: ride.drop_location?.longitude
+            });
+            setBookingStep('searching');
+            setSearchingDriver(true);
+            
+            // Start polling for this existing ride
+            const pollForDriverAcceptance = setInterval(async () => {
+                try {
+                    const statusResponse = await api.get(`/rides/${ride._id}/status`);
+                    if (statusResponse.data.success && statusResponse.data.ride) {
+                        const rideStatus = statusResponse.data.ride;
+                        
+                        if (rideStatus.status === 'accepted') {
+                            clearInterval(pollForDriverAcceptance);
+                            setSearchingDriver(false);
+                            setBookingStep('confirmed');
+                            setRideDetails(rideStatus);
+                            fetchRideHistory();
+                        } else if (rideStatus.status === 'cancelled') {
+                            clearInterval(pollForDriverAcceptance);
+                            setSearchingDriver(false);
+                            setBookingStep('error');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error polling ride status:', error);
+                }
+            }, 3000);
+        } else {
+            // Show ride details
+            setSelectedRideDetails(ride);
+        }
     };
 
     if (!user) {
@@ -346,7 +590,7 @@ export default function UserPortal({ user: propUser }) {
                     
                     <motion.div 
                         variants={staggerContainer}
-                        style={{ display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap' }}
+                        style={{ display: 'flex', gap: '20px', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}
                     >
                         <motion.a 
                             variants={staggerItem}
@@ -360,8 +604,11 @@ export default function UserPortal({ user: propUser }) {
                                 fontWeight: '600',
                                 letterSpacing: '0.025em',
                                 textDecoration: 'none',
-                                display: 'inline-block',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
                                 width: '160px',
+                                height: '56px',
                                 textAlign: 'center'
                             }}
                         >
@@ -379,8 +626,11 @@ export default function UserPortal({ user: propUser }) {
                                 fontWeight: '600',
                                 letterSpacing: '0.025em',
                                 textDecoration: 'none',
-                                display: 'inline-block',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
                                 width: '160px',
+                                height: '56px',
                                 textAlign: 'center'
                             }}
                         >
@@ -634,14 +884,32 @@ export default function UserPortal({ user: propUser }) {
                         >
                             <motion.div 
                                 whileHover={{ scale: 1.05 }}
-                                style={{ height: '200px', backgroundImage: 'url(/assets/Economy.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative', overflow: 'hidden' }}
+                                style={{ height: '200px', backgroundImage: 'url(/assets/Bike.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative', overflow: 'hidden' }}
                             >
                                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%)' }}></div>
                             </motion.div>
                             <div style={{ padding: '25px' }}>
-                                <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#1f2937', marginBottom: '8px', letterSpacing: '-0.025em' }}>Economy Cars</h3>
-                                <p style={{ color: '#6b7280', marginBottom: '16px', fontSize: '0.9rem', lineHeight: '1.6' }}>Perfect for daily commutes and city travel. Fuel-efficient and budget-friendly.</p>
+                                <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#1f2937', marginBottom: '8px', letterSpacing: '-0.025em' }}>Bikes</h3>
+                                <p style={{ color: '#6b7280', marginBottom: '16px', fontSize: '0.9rem', lineHeight: '1.6' }}>Quick and affordable rides for solo travel. Perfect for beating traffic.</p>
                                 <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#22c55e' }}>₹20 base + ₹8/km</div>
+                            </div>
+                        </motion.div>
+
+                        <motion.div 
+                            variants={staggerItem}
+                            whileHover={{ y: -10, boxShadow: '0 25px 50px rgba(0,0,0,0.15)' }}
+                            style={{ backgroundColor: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 15px 35px rgba(0,0,0,0.1)', cursor: 'pointer' }}
+                        >
+                            <motion.div 
+                                whileHover={{ scale: 1.05 }}
+                                style={{ height: '200px', backgroundImage: 'url(/assets/Sedan.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative', overflow: 'hidden' }}
+                            >
+                                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.3) 0%, rgba(22, 163, 74, 0.3) 100%)' }}></div>
+                            </motion.div>
+                            <div style={{ padding: '25px' }}>
+                                <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#1f2937', marginBottom: '8px', letterSpacing: '-0.025em' }}>Sedans</h3>
+                                <p style={{ color: '#6b7280', marginBottom: '16px', fontSize: '0.9rem', lineHeight: '1.6' }}>Comfortable and stylish for business and leisure travel. Perfect for city rides.</p>
+                                <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#22c55e' }}>₹50 base + ₹15/km</div>
                             </div>
                         </motion.div>
 
@@ -654,30 +922,12 @@ export default function UserPortal({ user: propUser }) {
                                 whileHover={{ scale: 1.05 }}
                                 style={{ height: '200px', backgroundImage: 'url(/assets/SUV.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative', overflow: 'hidden' }}
                             >
-                                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.3) 0%, rgba(22, 163, 74, 0.3) 100%)' }}></div>
-                            </motion.div>
-                            <div style={{ padding: '25px' }}>
-                                <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#1f2937', marginBottom: '8px', letterSpacing: '-0.025em' }}>Premium SUVs</h3>
-                                <p style={{ color: '#6b7280', marginBottom: '16px', fontSize: '0.9rem', lineHeight: '1.6' }}>Spacious and comfortable for families and groups. Premium amenities included.</p>
-                                <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#22c55e' }}>₹20 base + ₹18/km</div>
-                            </div>
-                        </motion.div>
-
-                        <motion.div 
-                            variants={staggerItem}
-                            whileHover={{ y: -10, boxShadow: '0 25px 50px rgba(0,0,0,0.15)' }}
-                            style={{ backgroundColor: 'white', borderRadius: '20px', overflow: 'hidden', boxShadow: '0 15px 35px rgba(0,0,0,0.1)', cursor: 'pointer' }}
-                        >
-                            <motion.div 
-                                whileHover={{ scale: 1.05 }}
-                                style={{ height: '200px', backgroundImage: 'url(/assets/Luxury.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative', overflow: 'hidden' }}
-                            >
                                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.3) 0%, rgba(217, 119, 6, 0.3) 100%)' }}></div>
                             </motion.div>
                             <div style={{ padding: '25px' }}>
-                                <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#1f2937', marginBottom: '8px', letterSpacing: '-0.025em' }}>Luxury Vehicles</h3>
-                                <p style={{ color: '#6b7280', marginBottom: '16px', fontSize: '0.9rem', lineHeight: '1.6' }}>Executive travel with style. Premium interiors and professional chauffeurs.</p>
-                                <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#22c55e' }}>₹20 base + ₹25/km</div>
+                                <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#1f2937', marginBottom: '8px', letterSpacing: '-0.025em' }}>SUVs</h3>
+                                <p style={{ color: '#6b7280', marginBottom: '16px', fontSize: '0.9rem', lineHeight: '1.6' }}>Spacious and comfortable for families and groups. Premium amenities included.</p>
+                                <div style={{ fontSize: '1.2rem', fontWeight: '700', color: '#22c55e' }}>₹80 base + ₹25/km</div>
                             </div>
                         </motion.div>
                     </motion.div>
@@ -1217,6 +1467,73 @@ export default function UserPortal({ user: propUser }) {
                         </div>
                     )}
 
+                    {bookingStep === 'payment' && selectedVehicle && (
+                        <motion.div 
+                            variants={slideUp}
+                            initial="hidden"
+                            animate="visible"
+                            style={{ marginTop: '30px' }}
+                        >
+                            <h3 style={{ textAlign: 'center', marginBottom: '20px', color: '#2d3748' }}>Choose Payment Method</h3>
+                            <div style={{
+                                backgroundColor: '#f8fafc',
+                                padding: '20px',
+                                borderRadius: '15px',
+                                marginBottom: '20px'
+                            }}>
+                                <h4 style={{ margin: '0 0 10px 0', color: '#2d3748' }}>Ride Summary</h4>
+                                <p style={{ margin: '5px 0', color: '#64748b' }}>Vehicle: {selectedVehicle.name}</p>
+                                <p style={{ margin: '5px 0', color: '#64748b' }}>Distance: {selectedVehicle.distance?.toFixed(1)} km</p>
+                                <p style={{ margin: '10px 0 0 0', fontSize: '18px', fontWeight: '600', color: '#22c55e' }}>Total: ₹{selectedVehicle.estimatedFare}</p>
+                            </div>
+                            <div style={{ display: 'grid', gap: '10px', marginBottom: '20px' }}>
+                                {[
+                                    { name: 'Cash', value: 'cash', icon: '💵', desc: 'Pay Driver Directly' },
+                                    { name: 'Razorpay', value: 'razorpay', icon: '💳', desc: 'UPI/Card/Wallet' },
+                                    { name: 'Stripe', value: 'stripe', icon: '💳', desc: 'International Cards' },
+                                    { name: 'PayPal', value: 'paypal', icon: '🅿️', desc: 'PayPal Account' }
+                                ].map(method => (
+                                    <button 
+                                        key={method.value} 
+                                        onClick={() => handleRideRequest(selectedVehicle, method.value)}
+                                        style={{
+                                            padding: '15px', 
+                                            backgroundColor: 'white', 
+                                            border: '2px solid #e2e8f0', 
+                                            borderRadius: '10px', 
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            transition: 'all 0.3s ease'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.target.style.borderColor = '#667eea';
+                                            e.target.style.backgroundColor = '#f8fafc';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.target.style.borderColor = '#e2e8f0';
+                                            e.target.style.backgroundColor = 'white';
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <span style={{ fontSize: '20px' }}>{method.icon}</span>
+                                            <div style={{ textAlign: 'left' }}>
+                                                <div style={{ fontWeight: '600', color: '#2d3748' }}>{method.name}</div>
+                                                <div style={{ fontSize: '12px', color: '#64748b' }}>{method.desc}</div>
+                                            </div>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                            <div style={{ textAlign: 'center' }}>
+                                <button onClick={() => setBookingStep('vehicles')} className="btn btn-secondary" style={{
+                                    padding: '10px 20px'
+                                }}>Back to Vehicles</button>
+                            </div>
+                        </motion.div>
+                    )}
+
                     {bookingStep === 'vehicles' && (
                         <motion.div 
                             variants={slideUp}
@@ -1232,56 +1549,17 @@ export default function UserPortal({ user: propUser }) {
                                 variants={staggerContainer}
                                 style={{ display: 'grid', gap: '15px' }}
                             >
-                                {[
-                                    { type: 'bike', name: 'Bike', icon: '🏍️', price: 8, time: '2-5 min' },
-                                    { type: 'sedan', name: 'Sedan', icon: '🚗', price: 12, time: '3-7 min' },
-                                    { type: 'suv', name: 'SUV', icon: '🚙', price: 18, time: '5-10 min' }
-                                ].map(vehicle => {
-                                    const baseFare = 20;
-                                    const estimatedFare = Math.round(baseFare + (vehicle.price * distance));
-                                    return (
-                                        <motion.div 
-                                            key={vehicle.type} 
-                                            variants={staggerItem}
-                                            whileHover={{ scale: 1.02, borderColor: '#667eea' }}
-                                            whileTap={{ scale: 0.98 }}
-                                            style={{
-                                                display: 'flex',
-                                                justifyContent: 'space-between',
-                                                alignItems: 'center',
-                                                padding: '20px',
-                                                border: '2px solid #e2e8f0',
-                                                borderRadius: '15px',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.3s ease'
-                                            }}
-                                            onClick={() => handleVehicleSelect({...vehicle, estimatedFare, distance})}
-                                        >
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                                <div style={{ fontSize: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px' }}>
-                                                    {vehicle.type === 'bike' ? (
-                                                        <img src="/assets/Bike Symbol.png" alt="Bike" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
-                                                    ) : (
-                                                        vehicle.icon
-                                                    )}
-                                                </div>
-                                                <div>
-                                                    <h4 style={{ margin: '0 0 5px 0', color: '#2d3748' }}>{vehicle.name}</h4>
-                                                    <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>{vehicle.time}</p>
-                                                </div>
-                                            </div>
-                                            <div style={{ textAlign: 'right' }}>
-                                                <div style={{ fontSize: '18px', fontWeight: '600', color: '#22c55e' }}>₹{estimatedFare}</div>
-                                                <div style={{ fontSize: '12px', color: '#64748b' }}>₹20 base + ₹{vehicle.price}/km</div>
-                                            </div>
-                                        </motion.div>
-                                    );
-                                })}
+                                <VehicleOptions 
+                                    pickupLocation={pickupLocation}
+                                    destinationLocation={destinationLocation}
+                                    distance={distance}
+                                    onVehicleSelect={handleVehicleSelect}
+                                />
                             </motion.div>
                             <div style={{ textAlign: 'center', marginTop: '20px' }}>
                                 <button onClick={() => setBookingStep('locations')} className="btn btn-secondary" style={{
                                     padding: '10px 20px'
-                                }}>Back</button>
+                                }}>Back to Locations</button>
                             </div>
                         </motion.div>
                     )}
@@ -1367,7 +1645,7 @@ export default function UserPortal({ user: propUser }) {
                                         <div style={{ flex: 1 }}>
                                             <h4 style={{ margin: '0 0 5px 0', color: '#2d3748' }}>{rideDetails.driver_info?.name}</h4>
                                             <p style={{ margin: '0 0 5px 0', color: '#64748b', fontSize: '14px' }}>
-                                                ⭐ {rideDetails.driver_info?.rating} • {rideDetails.driver_info?.vehicle_number}
+                                                ⭐ {rideDetails.driver_info?.rating} • 🚗 {rideDetails.driver_info?.vehicle_number}
                                             </p>
                                             <p style={{ margin: 0, color: '#22c55e', fontSize: '14px', fontWeight: '600' }}>
                                                 📍 {rideDetails.driver_info?.distance_from_user} km away • ETA: {rideDetails.driver_info?.eta} min
@@ -1514,7 +1792,18 @@ export default function UserPortal({ user: propUser }) {
                                         🗺️ Track Ride
                                     </button>
                                     <button
-                                        onClick={resetBooking}
+                                        onClick={async () => {
+                                            if (confirm('Are you sure you want to cancel this ride?')) {
+                                                try {
+                                                    await api.put(`/rides/${rideDetails._id}/cancel`);
+                                                    alert('Ride cancelled successfully');
+                                                    resetBooking();
+                                                    fetchRideHistory();
+                                                } catch (error) {
+                                                    alert('Failed to cancel ride: ' + (error.response?.data?.error || error.message));
+                                                }
+                                            }
+                                        }}
                                         className="btn btn-danger"
                                         style={{
                                             padding: '12px 24px',
@@ -1824,9 +2113,22 @@ export default function UserPortal({ user: propUser }) {
                                     paddingBottom: '15px',
                                     borderBottom: '2px solid #f1f5f9'
                                 }}>
-                                    <div style={{ fontSize: '48px', marginBottom: '10px' }}>🚗</div>
-                                    <h2 style={{ margin: '0 0 5px 0', color: '#2d3748' }}>Driver is on the way</h2>
-                                    <p style={{ margin: 0, color: '#64748b' }}>ETA: {rideDetails.driver_info?.eta} minutes</p>
+                                    <div style={{ fontSize: '48px', marginBottom: '10px' }}>
+                                        {rideDetails.status === 'completed' ? '✅' : 
+                                         rideDetails.status === 'in_progress' ? '🚗' : 
+                                         rideDetails.status === 'cancelled' ? '❌' : '🚗'}
+                                    </div>
+                                    <h2 style={{ margin: '0 0 5px 0', color: '#2d3748' }}>
+                                        {rideDetails.status === 'completed' ? 'Ride Completed' : 
+                                         rideDetails.status === 'in_progress' ? 'Ride in Progress' : 
+                                         rideDetails.status === 'cancelled' ? 'Ride Cancelled' : 'Driver is on the way'}
+                                    </h2>
+                                    <p style={{ margin: 0, color: '#64748b' }}>
+                                        {rideDetails.status === 'completed' ? 'Thank you for choosing our service!' : 
+                                         rideDetails.status === 'in_progress' ? 'On the way to destination' : 
+                                         rideDetails.status === 'cancelled' ? 'This ride has been cancelled' : 
+                                         `ETA: ${rideDetails.driver_info?.eta} minutes`}
+                                    </p>
                                 </div>
 
                                 {/* Driver Card */}
@@ -1852,28 +2154,28 @@ export default function UserPortal({ user: propUser }) {
                                     <div style={{ flex: 1 }}>
                                         <h4 style={{ margin: '0 0 5px 0', color: '#2d3748' }}>{rideDetails.driver_info?.name}</h4>
                                         <p style={{ margin: '0 0 5px 0', color: '#64748b', fontSize: '14px' }}>
-                                            ⭐ {rideDetails.driver_info?.rating} • {rideDetails.driver_info?.vehicle_number}
+                                            ⭐ {rideDetails.driver_info?.rating} • 🚗 {rideDetails.driver_info?.vehicle_number}
                                         </p>
-                                        <p style={{ margin: 0, color: '#22c55e', fontSize: '14px', fontWeight: '600' }}>
-                                            📍 {rideDetails.driver_info?.distance_from_user} km away
+                                        <p style={{ margin: 0, color: rideDetails.status === 'completed' ? '#16a34a' : '#22c55e', fontSize: '14px', fontWeight: '600' }}>
+                                            {rideDetails.status === 'completed' ? '✅ Trip Completed' : 
+                                             rideDetails.status === 'in_progress' ? '🚗 En route to destination' : 
+                                             `📍 ${rideDetails.driver_info?.distance_from_user} km away`}
                                         </p>
                                     </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        <a href={`tel:${rideDetails.driver_info?.phone}`} style={{
-                                            display: 'inline-block',
-                                            padding: '8px 12px',
-                                            backgroundColor: '#22c55e',
-                                            color: 'white',
-                                            textDecoration: 'none',
-                                            borderRadius: '6px',
-                                            fontSize: '12px',
-                                            textAlign: 'center'
-                                        }}>📞 Call</a>
-                                        <button className="btn btn-primary" style={{
-                                            padding: '8px 12px',
-                                            fontSize: '12px'
-                                        }}>💬 Message</button>
-                                    </div>
+                                    {(rideDetails.status === 'accepted' || rideDetails.status === 'in_progress') && (
+                                        <div>
+                                            <a href={`tel:${rideDetails.driver_info?.phone}`} style={{
+                                                display: 'inline-block',
+                                                padding: '8px 12px',
+                                                backgroundColor: '#22c55e',
+                                                color: 'white',
+                                                textDecoration: 'none',
+                                                borderRadius: '6px',
+                                                fontSize: '12px',
+                                                textAlign: 'center'
+                                            }}>📞 Call</a>
+                                        </div>
+                                    )}
                                 </div>
 
 
@@ -1884,7 +2186,9 @@ export default function UserPortal({ user: propUser }) {
                                     borderRadius: '12px',
                                     marginBottom: '20px'
                                 }}>
-                                    <h3 style={{ margin: '0 0 15px 0', color: '#0369a1' }}>🗺️ Trip Progress</h3>
+                                    <h3 style={{ margin: '0 0 15px 0', color: '#0369a1' }}>
+                                        🗺️ {rideDetails.status === 'completed' ? 'Trip Summary' : 'Trip Progress'}
+                                    </h3>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                             <div style={{
@@ -1902,31 +2206,63 @@ export default function UserPortal({ user: propUser }) {
                                             <div style={{
                                                 width: '12px',
                                                 height: '12px',
-                                                backgroundColor: '#ef4444',
+                                                backgroundColor: rideDetails.status === 'completed' ? '#10b981' : '#ef4444',
                                                 borderRadius: '50%'
                                             }}></div>
                                             <span style={{ color: '#374151', fontSize: '14px' }}>
                                                 <strong>Destination:</strong> {rideDetails.drop_location?.address}
                                             </span>
                                         </div>
+                                        {rideDetails.status === 'completed' && (
+                                            <div style={{ 
+                                                marginTop: '10px', 
+                                                padding: '10px', 
+                                                backgroundColor: '#dcfce7', 
+                                                borderRadius: '8px',
+                                                textAlign: 'center'
+                                            }}>
+                                                <span style={{ color: '#16a34a', fontSize: '14px', fontWeight: '600' }}>
+                                                    ✅ Journey Completed Successfully
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
-                                {/* OTP Reminder */}
-                                <div style={{
-                                    backgroundColor: '#fef3c7',
-                                    padding: '15px',
-                                    borderRadius: '10px',
-                                    marginBottom: '20px',
-                                    textAlign: 'center'
-                                }}>
-                                    <p style={{ margin: '0 0 8px 0', color: '#92400e', fontSize: '14px', fontWeight: '600' }}>
-                                        Your OTP: <span style={{ fontSize: '18px', letterSpacing: '2px' }}>{rideDetails.otp?.code}</span>
-                                    </p>
-                                    <p style={{ margin: 0, color: '#92400e', fontSize: '12px' }}>
-                                        Share this with your driver when they arrive
-                                    </p>
-                                </div>
+                                {/* OTP Reminder - Only show for accepted rides */}
+                                {rideDetails.status === 'accepted' && (
+                                    <div style={{
+                                        backgroundColor: '#fef3c7',
+                                        padding: '15px',
+                                        borderRadius: '10px',
+                                        marginBottom: '20px',
+                                        textAlign: 'center'
+                                    }}>
+                                        <p style={{ margin: '0 0 8px 0', color: '#92400e', fontSize: '14px', fontWeight: '600' }}>
+                                            Your OTP: <span style={{ fontSize: '18px', letterSpacing: '2px' }}>{rideDetails.otp?.code}</span>
+                                        </p>
+                                        <p style={{ margin: 0, color: '#92400e', fontSize: '12px' }}>
+                                            Share this with your driver when they arrive
+                                        </p>
+                                    </div>
+                                )}
+                                
+                                {/* Completion Message for completed rides */}
+                                {rideDetails.status === 'completed' && (
+                                    <div style={{
+                                        backgroundColor: '#dcfce7',
+                                        padding: '20px',
+                                        borderRadius: '12px',
+                                        marginBottom: '20px',
+                                        textAlign: 'center'
+                                    }}>
+                                        <div style={{ fontSize: '32px', marginBottom: '10px' }}>🎉</div>
+                                        <h3 style={{ margin: '0 0 10px 0', color: '#16a34a' }}>Trip Completed Successfully!</h3>
+                                        <p style={{ margin: 0, color: '#15803d', fontSize: '14px' }}>
+                                            Thank you for choosing our service. We hope you had a great experience!
+                                        </p>
+                                    </div>
+                                )}
 
                                 {/* Action Buttons */}
                                 <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
@@ -1940,16 +2276,44 @@ export default function UserPortal({ user: propUser }) {
                                     >
                                         ← Back to Details
                                     </button>
-                                    <button
-                                        onClick={resetBooking}
-                                        className="btn btn-danger"
-                                        style={{
-                                            padding: '12px 24px',
-                                            fontSize: '16px'
-                                        }}
-                                    >
-                                        Cancel Ride
-                                    </button>
+                                    {rideDetails.status === 'accepted' && (
+                                        <button
+                                            onClick={async () => {
+                                                if (confirm('Are you sure you want to cancel this ride?')) {
+                                                    try {
+                                                        await api.put(`/rides/${rideDetails._id}/cancel`);
+                                                        alert('Ride cancelled successfully');
+                                                        resetBooking();
+                                                        fetchRideHistory();
+                                                    } catch (error) {
+                                                        alert('Failed to cancel ride: ' + (error.response?.data?.error || error.message));
+                                                    }
+                                                }
+                                            }}
+                                            className="btn btn-danger"
+                                            style={{
+                                                padding: '12px 24px',
+                                                fontSize: '16px'
+                                            }}
+                                        >
+                                            Cancel Ride
+                                        </button>
+                                    )}
+                                    {rideDetails.status === 'completed' && (
+                                        <button
+                                            onClick={() => {
+                                                setActiveTab('history');
+                                                resetBooking();
+                                            }}
+                                            className="btn btn-success"
+                                            style={{
+                                                padding: '12px 24px',
+                                                fontSize: '16px'
+                                            }}
+                                        >
+                                            View History
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </motion.div>
@@ -1988,32 +2352,18 @@ export default function UserPortal({ user: propUser }) {
                                         borderRadius: '15px',
                                         padding: '20px',
                                         transition: 'all 0.3s ease',
-                                        cursor: ride.status === 'requested' ? 'pointer' : 'default'
+                                        cursor: 'pointer'
                                     }}
-                                    onClick={() => {
-                                        if (ride.status === 'requested') {
-                                            setActiveTab('book');
-                                            setBookingStep('searching');
-                                            setRideDetails(ride);
-                                            setSelectedVehicle({ type: ride.vehicle_type, estimatedFare: ride.fare });
-                                            setPickupLocation({ address: ride.pickup_location?.address, latitude: ride.pickup_location?.latitude, longitude: ride.pickup_location?.longitude });
-                                            setDestinationLocation({ address: ride.drop_location?.address, latitude: ride.drop_location?.latitude, longitude: ride.drop_location?.longitude });
-                                            setSearchingDriver(true);
-                                        }
-                                    }}
+                                    onClick={() => handleRideCardClick(ride)}
                                     onMouseEnter={(e) => {
-                                        if (ride.status === 'requested') {
-                                            e.target.style.borderColor = '#667eea';
-                                            e.target.style.transform = 'translateY(-2px)';
-                                            e.target.style.boxShadow = '0 8px 25px rgba(0,0,0,0.1)';
-                                        }
+                                        e.target.style.borderColor = '#667eea';
+                                        e.target.style.transform = 'translateY(-2px)';
+                                        e.target.style.boxShadow = '0 8px 25px rgba(0,0,0,0.1)';
                                     }}
                                     onMouseLeave={(e) => {
-                                        if (ride.status === 'requested') {
-                                            e.target.style.borderColor = '#e2e8f0';
-                                            e.target.style.transform = 'translateY(0)';
-                                            e.target.style.boxShadow = 'none';
-                                        }
+                                        e.target.style.borderColor = '#e2e8f0';
+                                        e.target.style.transform = 'translateY(0)';
+                                        e.target.style.boxShadow = 'none';
                                     }}
                                 >
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
@@ -2102,26 +2452,191 @@ export default function UserPortal({ user: propUser }) {
                                                     <span style={{ fontWeight: '600' }}>Driver:</span> {ride.driver_id.name}
                                                 </div>
                                             )}
-                                            {ride.status === 'requested' && (
+                                            {ride.status === 'searching' && (
                                                 <div style={{ fontSize: '12px', color: '#f59e0b' }}>
-                                                    <span style={{ fontWeight: '600' }}>Status:</span> Waiting for driver
+                                                    <span style={{ fontWeight: '600' }}>Status:</span> Searching for driver
                                                 </div>
                                             )}
                                         </div>
                                         
                                         <div style={{ display: 'flex', gap: '8px' }}>
                                             {(ride.status === 'accepted' || ride.status === 'in_progress') && (
-                                                <Link 
-                                                    to={`/track-ride/${ride._id}`}
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        // Set the ride details and switch to tracking view
+                                                        setRideDetails(ride);
+                                                        setActiveTab('book');
+                                                        setBookingStep('tracking');
+                                                    }}
                                                     className="btn btn-primary"
-                                                    style={{ padding: '6px 16px', fontSize: '12px', textDecoration: 'none' }}
+                                                    style={{ padding: '6px 16px', fontSize: '12px' }}
                                                 >
                                                     📍 Track Ride
-                                                </Link>
+                                                </button>
                                             )}
-                                            {ride.status === 'requested' && (
+                                            {ride.status === 'completed' && (
+                                                <>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            // Set the ride details and switch to tracking view to show completion status
+                                                            setRideDetails(ride);
+                                                            setActiveTab('book');
+                                                            setBookingStep('tracking');
+                                                        }}
+                                                        className="btn btn-success"
+                                                        style={{ padding: '6px 16px', fontSize: '12px' }}
+                                                    >
+                                                        📋 View Details
+                                                    </button>
+                                                    <button
+                                                        onClick={async (e) => {
+                                                            e.stopPropagation();
+                                                            try {
+                                                                const response = await api.get(`/invoices/ride/${ride._id}`);
+                                                                if (response.data.success) {
+                                                                    setInvoiceData(response.data.invoice);
+                                                                    setShowInvoiceModal(true);
+                                                                }
+                                                            } catch (error) {
+                                                                alert('Failed to load invoice: ' + (error.response?.data?.error || error.message));
+                                                            }
+                                                        }}
+                                                        className="btn btn-primary"
+                                                        style={{ padding: '6px 12px', fontSize: '12px' }}
+                                                    >
+                                                        📄 Invoice
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setRatingData({ ride, rating: 5, comment: '' });
+                                                            setShowRatingModal(true);
+                                                        }}
+                                                        className="btn btn-success"
+                                                        style={{ padding: '6px 12px', fontSize: '12px' }}
+                                                    >
+                                                        ⭐ Rate
+                                                    </button>
+                                                </>
+                                            )}
+                                            {['accepted', 'in_progress'].includes(ride.status) && ride.payment_method !== 'cash' && ride.payment_status !== 'paid' && (
                                                 <button 
-                                                    onClick={async () => {
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        try {
+                                                            console.log('Initiating payment with data:', {
+                                                                rideId: ride._id,
+                                                                amount: ride.fare,
+                                                                paymentMethod: ride.payment_method
+                                                            });
+                                                            
+                                                            const paymentAmount = ride.fare || ride.estimated_fare || 100; // Fallback amount
+                                                            
+                                                            const response = await api.post('/payments/initiate', {
+                                                                rideId: ride._id,
+                                                                amount: Number(paymentAmount),
+                                                                paymentMethod: ride.payment_method
+                                                            });
+                                                            
+                                                            console.log('Payment initiation response:', response.data);
+                                                            
+                                                            if (response.data.success) {
+                                                                if (ride.payment_method === 'razorpay') {
+                                                                    const options = {
+                                                                        key: process.env.REACT_APP_RAZORPAY_KEY_ID,
+                                                                        amount: ride.fare * 100,
+                                                                        currency: 'INR',
+                                                                        name: 'Car Rental Service',
+                                                                        description: `Payment for ride ${ride._id}`,
+                                                                        order_id: response.data.gateway_response.order_id,
+                                                                        handler: async function(paymentResponse) {
+                                                                            try {
+                                                                                await api.post(`/payments/${response.data.payment_id}/verify`, {
+                                                                                    gateway_payment_id: paymentResponse.razorpay_payment_id,
+                                                                                    signature: paymentResponse.razorpay_signature
+                                                                                });
+                                                                                alert('Payment successful! Driver has been notified.');
+                                                                                fetchRideHistory();
+                                                                            } catch (error) {
+                                                                                alert('Payment verification failed');
+                                                                            }
+                                                                        },
+                                                                        modal: {
+                                                                            ondismiss: function() {
+                                                                                console.log('Razorpay payment cancelled by user');
+                                                                                // Update ride status or show retry option
+                                                                                fetchRideHistory();
+                                                                            }
+                                                                        }
+                                                                    };
+                                                                    const rzp = new window.Razorpay(options);
+                                                                    rzp.open();
+                                                                } else if (ride.payment_method === 'stripe') {
+                                                                    // Store payment attempt for tracking
+                                                                    const paymentAttemptId = response.data.payment_id;
+                                                                    sessionStorage.setItem('stripe_payment_attempt', paymentAttemptId);
+                                                                    
+                                                                    const stripe = window.Stripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
+                                                                    const { error } = await stripe.redirectToCheckout({
+                                                                        sessionId: response.data.gateway_response.session_id
+                                                                    });
+                                                                    if (error) {
+                                                                        console.log('Stripe payment failed:', error.message);
+                                                                        sessionStorage.removeItem('stripe_payment_attempt');
+                                                                        fetchRideHistory();
+                                                                    }
+                                                                } else if (ride.payment_method === 'paypal') {
+                                                                    // For PayPal, use the approval_url from the response
+                                                                    const approvalUrl = response.data.gateway_response.approval_url;
+                                                                    if (approvalUrl) {
+                                                                        const paymentWindow = window.open(approvalUrl, '_blank', 'width=600,height=700');
+                                                                        
+                                                                        // Check if payment window is closed without completion
+                                                                        const checkClosed = setInterval(() => {
+                                                                            if (paymentWindow.closed) {
+                                                                                clearInterval(checkClosed);
+                                                                                console.log('PayPal payment window closed by user');
+                                                                                // Refresh ride history to check payment status
+                                                                                setTimeout(() => fetchRideHistory(), 2000);
+                                                                            }
+                                                                        }, 1000);
+                                                                    } else {
+                                                                        alert('PayPal payment URL not available');
+                                                                    }
+                                                                } else {
+                                                                    // For other gateways, open in new window and track focus
+                                                                    const paymentWindow = window.open(response.data.gateway_response.url, '_blank');
+                                                                    
+                                                                    // Check if payment window is closed without completion
+                                                                    const checkClosed = setInterval(() => {
+                                                                        if (paymentWindow.closed) {
+                                                                            clearInterval(checkClosed);
+                                                                            console.log('Payment window closed by user');
+                                                                            // Refresh ride history to check payment status
+                                                                            setTimeout(() => fetchRideHistory(), 2000);
+                                                                        }
+                                                                    }, 1000);
+                                                                }
+                                                            }
+                                                        } catch (error) {
+                                                            console.error('Payment error:', error);
+                                                            console.error('Error response:', error.response?.data);
+                                                            console.error('Error status:', error.response?.status);
+                                                            alert(`Failed to initiate payment: ${error.response?.data?.error || error.message}`);
+                                                        }
+                                                    }}
+                                                    className="btn btn-success"
+                                                    style={{ padding: '6px 16px', fontSize: '12px' }}
+                                                >
+                                                    💳 Pay Now ({ride.payment_method})
+                                                </button>
+                                            )}
+                                            {ride.status === 'searching' && (
+                                                <button 
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation();
                                                         if (confirm('Are you sure you want to cancel this ride?')) {
                                                             try {
                                                                 await api.put(`/rides/${ride._id}/cancel`);
@@ -2144,6 +2659,452 @@ export default function UserPortal({ user: propUser }) {
                         </div>
                     )}
                 </AnimatedCard>
+                )}
+                
+                {/* Invoice Modal */}
+                {showInvoiceModal && invoiceData && (
+                    <div style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        backgroundColor: 'rgba(0,0,0,0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 1000
+                    }}>
+                        <div style={{
+                            backgroundColor: 'white',
+                            borderRadius: '20px',
+                            padding: '30px',
+                            maxWidth: '500px',
+                            width: '90%',
+                            maxHeight: '80vh',
+                            overflowY: 'auto',
+                            position: 'relative'
+                        }}>
+                            <button
+                                onClick={() => setShowInvoiceModal(false)}
+                                style={{
+                                    position: 'absolute',
+                                    top: '15px',
+                                    right: '15px',
+                                    background: 'none',
+                                    border: 'none',
+                                    fontSize: '24px',
+                                    cursor: 'pointer',
+                                    color: '#64748b'
+                                }}
+                            >
+                                ×
+                            </button>
+                            
+                            <div style={{ textAlign: 'center', marginBottom: '25px' }}>
+                                <div style={{ fontSize: '48px', marginBottom: '10px' }}>📄</div>
+                                <h2 style={{ margin: '0 0 5px 0', color: '#2d3748' }}>Invoice</h2>
+                                <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
+                                    #{invoiceData.invoice_number}
+                                </p>
+                            </div>
+                            
+                            <div style={{
+                                backgroundColor: '#f8fafc',
+                                padding: '20px',
+                                borderRadius: '12px',
+                                marginBottom: '20px'
+                            }}>
+                                <h3 style={{ margin: '0 0 15px 0', color: '#374151' }}>🚗 Trip Details</h3>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <div><strong>From:</strong> {invoiceData.trip.pickup_address}</div>
+                                    <div><strong>To:</strong> {invoiceData.trip.drop_address}</div>
+                                    <div><strong>Distance:</strong> {invoiceData.trip.distance} km</div>
+                                    <div><strong>Duration:</strong> {invoiceData.trip.duration} min</div>
+                                    <div><strong>Date:</strong> {new Date(invoiceData.date).toLocaleDateString()}</div>
+                                </div>
+                            </div>
+                            
+                            <div style={{
+                                backgroundColor: '#f0f9ff',
+                                padding: '20px',
+                                borderRadius: '12px',
+                                marginBottom: '20px'
+                            }}>
+                                <h3 style={{ margin: '0 0 15px 0', color: '#0369a1' }}>💰 Fare Breakdown</h3>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <span>Base Fare:</span>
+                                        <span>₹{invoiceData.fare.base_fare}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <span>Distance Fare:</span>
+                                        <span>₹{invoiceData.fare.distance_fare}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <span>Time Fare:</span>
+                                        <span>₹{invoiceData.fare.time_fare}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <span>Tax:</span>
+                                        <span>₹{invoiceData.fare.tax}</span>
+                                    </div>
+                                    <hr style={{ margin: '10px 0', border: 'none', borderTop: '1px solid #cbd5e1' }} />
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', fontWeight: '700', color: '#16a34a' }}>
+                                        <span>Total:</span>
+                                        <span>₹{invoiceData.fare.total_fare}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div style={{
+                                backgroundColor: invoiceData.payment_status === 'paid' ? '#dcfce7' : '#fef3c7',
+                                padding: '15px',
+                                borderRadius: '10px',
+                                textAlign: 'center',
+                                marginBottom: '20px'
+                            }}>
+                                <div style={{
+                                    color: invoiceData.payment_status === 'paid' ? '#16a34a' : '#d97706',
+                                    fontWeight: '600'
+                                }}>
+                                    Payment Status: {invoiceData.payment_status === 'paid' ? '✅ PAID' : '⏳ PENDING'}
+                                </div>
+                            </div>
+                            
+                            <div style={{ textAlign: 'center' }}>
+                                <button
+                                    onClick={() => setShowInvoiceModal(false)}
+                                    className="btn btn-primary"
+                                    style={{ padding: '12px 30px' }}
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
+                {/* Rating Modal */}
+                {showRatingModal && ratingData.ride && (
+                    <div style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        backgroundColor: 'rgba(0,0,0,0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 1000
+                    }}>
+                        <div style={{
+                            backgroundColor: 'white',
+                            borderRadius: '20px',
+                            padding: '30px',
+                            maxWidth: '400px',
+                            width: '90%',
+                            position: 'relative'
+                        }}>
+                            <button
+                                onClick={() => setShowRatingModal(false)}
+                                style={{
+                                    position: 'absolute',
+                                    top: '15px',
+                                    right: '15px',
+                                    background: 'none',
+                                    border: 'none',
+                                    fontSize: '24px',
+                                    cursor: 'pointer',
+                                    color: '#64748b'
+                                }}
+                            >
+                                ×
+                            </button>
+                            
+                            <div style={{ textAlign: 'center', marginBottom: '25px' }}>
+                                <div style={{ fontSize: '48px', marginBottom: '10px' }}>⭐</div>
+                                <h2 style={{ margin: '0 0 5px 0', color: '#2d3748' }}>Rate Your Driver</h2>
+                                <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
+                                    How was your ride experience?
+                                </p>
+                            </div>
+                            
+                            <div style={{ marginBottom: '20px' }}>
+                                <div style={{ textAlign: 'center', marginBottom: '15px' }}>
+                                    {[1, 2, 3, 4, 5].map(star => (
+                                        <button
+                                            key={star}
+                                            onClick={() => setRatingData(prev => ({ ...prev, rating: star }))}
+                                            style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                fontSize: '32px',
+                                                cursor: 'pointer',
+                                                color: star <= ratingData.rating ? '#fbbf24' : '#d1d5db',
+                                                margin: '0 2px',
+                                                transition: 'color 0.2s ease'
+                                            }}
+                                        >
+                                            ★
+                                        </button>
+                                    ))}
+                                </div>
+                                <div style={{ textAlign: 'center', marginBottom: '15px', color: '#64748b' }}>
+                                    {ratingData.rating} out of 5 stars
+                                </div>
+                            </div>
+                            
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#374151' }}>
+                                    Comment (Optional)
+                                </label>
+                                <textarea
+                                    value={ratingData.comment}
+                                    onChange={(e) => setRatingData(prev => ({ ...prev, comment: e.target.value }))}
+                                    placeholder="Share your experience..."
+                                    style={{
+                                        width: '100%',
+                                        height: '80px',
+                                        padding: '10px',
+                                        border: '2px solid #e2e8f0',
+                                        borderRadius: '8px',
+                                        fontSize: '14px',
+                                        resize: 'none'
+                                    }}
+                                />
+                            </div>
+                            
+                            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                                <button
+                                    onClick={() => setShowRatingModal(false)}
+                                    className="btn btn-secondary"
+                                    style={{ padding: '10px 20px' }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            console.log('Submitting rating for ride:', ratingData.ride._id);
+                                            const invoiceResponse = await api.get(`/invoices/ride/${ratingData.ride._id}`);
+                                            console.log('Invoice response:', invoiceResponse.data);
+                                            
+                                            if (!invoiceResponse.data.success || !invoiceResponse.data.invoice) {
+                                                throw new Error('Invoice not found');
+                                            }
+                                            
+                                            // Get the invoice ID from the response - need to find the actual MongoDB _id
+                                            const invoice = invoiceResponse.data.invoice;
+                                            const invoiceId = invoice._id || invoice.id;
+                                            console.log('Using invoice ID:', invoiceId);
+                                            
+                                            if (!invoiceId) {
+                                                throw new Error('Invoice ID not found in response');
+                                            }
+                                            
+                                            await api.post(`/invoices/${invoiceId}/rating`, {
+                                                rating: ratingData.rating,
+                                                comment: ratingData.comment
+                                            });
+                                            alert('Rating submitted successfully!');
+                                            setShowRatingModal(false);
+                                            fetchRideHistory();
+                                        } catch (error) {
+                                            console.error('Rating submission error:', error);
+                                            alert('Failed to submit rating: ' + (error.response?.data?.error || error.message));
+                                        }
+                                    }}
+                                    className="btn btn-success"
+                                    style={{ padding: '10px 20px' }}
+                                >
+                                    Submit Rating
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
+                {/* Ride Details Modal */}
+                {selectedRideDetails && (
+                    <div style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        backgroundColor: 'rgba(0,0,0,0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 1000
+                    }}>
+                        <div style={{
+                            backgroundColor: 'white',
+                            borderRadius: '20px',
+                            padding: '30px',
+                            maxWidth: '500px',
+                            width: '90%',
+                            maxHeight: '80vh',
+                            overflowY: 'auto',
+                            position: 'relative'
+                        }}>
+                            <button
+                                onClick={() => setSelectedRideDetails(null)}
+                                style={{
+                                    position: 'absolute',
+                                    top: '15px',
+                                    right: '15px',
+                                    background: 'none',
+                                    border: 'none',
+                                    fontSize: '24px',
+                                    cursor: 'pointer',
+                                    color: '#64748b'
+                                }}
+                            >
+                                ×
+                            </button>
+                            
+                            <h2 style={{ marginBottom: '20px', color: '#2d3748' }}>
+                                Trip Details
+                            </h2>
+                            
+                            <div style={{
+                                padding: '15px',
+                                backgroundColor: '#f8fafc',
+                                borderRadius: '10px',
+                                marginBottom: '20px'
+                            }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                    <span style={{ fontWeight: '600', color: '#2d3748' }}>Trip #{selectedRideDetails._id.slice(-6).toUpperCase()}</span>
+                                    <div style={{
+                                        padding: '4px 12px',
+                                        borderRadius: '12px',
+                                        fontSize: '12px',
+                                        fontWeight: '600',
+                                        backgroundColor:
+                                            selectedRideDetails.status === 'completed' ? '#dcfce7' :
+                                            selectedRideDetails.status === 'cancelled' ? '#fef2f2' :
+                                            selectedRideDetails.status === 'in_progress' ? '#fef3c7' : '#dbeafe',
+                                        color:
+                                            selectedRideDetails.status === 'completed' ? '#16a34a' :
+                                            selectedRideDetails.status === 'cancelled' ? '#dc2626' :
+                                            selectedRideDetails.status === 'in_progress' ? '#d97706' : '#2563eb'
+                                    }}>
+                                        {selectedRideDetails.status.replace('_', ' ').toUpperCase()}
+                                    </div>
+                                </div>
+                                <p style={{ margin: 0, color: '#64748b', fontSize: '14px' }}>
+                                    {new Date(selectedRideDetails.createdAt).toLocaleDateString('en-US', {
+                                        year: 'numeric',
+                                        month: 'long',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                    })}
+                                </p>
+                            </div>
+                            
+                            <div style={{ marginBottom: '20px' }}>
+                                <h3 style={{ marginBottom: '15px', color: '#374151' }}>Route</h3>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                                        <div style={{
+                                            width: '12px',
+                                            height: '12px',
+                                            backgroundColor: '#22c55e',
+                                            borderRadius: '50%',
+                                            marginTop: '4px'
+                                        }}></div>
+                                        <div>
+                                            <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>FROM</div>
+                                            <div style={{ fontSize: '14px', color: '#2d3748' }}>
+                                                {selectedRideDetails.pickup_location?.address || 'Unknown location'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style={{ marginLeft: '6px', width: '2px', height: '20px', backgroundColor: '#d1d5db' }}></div>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                                        <div style={{
+                                            width: '12px',
+                                            height: '12px',
+                                            backgroundColor: '#ef4444',
+                                            borderRadius: '50%',
+                                            marginTop: '4px'
+                                        }}></div>
+                                        <div>
+                                            <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>TO</div>
+                                            <div style={{ fontSize: '14px', color: '#2d3748' }}>
+                                                {selectedRideDetails.drop_location?.address || 'Unknown location'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(2, 1fr)',
+                                gap: '15px',
+                                marginBottom: '20px'
+                            }}>
+                                <div style={{ textAlign: 'center', padding: '15px', backgroundColor: '#f0f9ff', borderRadius: '10px' }}>
+                                    <div style={{ fontSize: '18px', fontWeight: '700', color: '#22c55e' }}>₹{selectedRideDetails.fare}</div>
+                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Total Fare</div>
+                                </div>
+                                <div style={{ textAlign: 'center', padding: '15px', backgroundColor: '#f0f9ff', borderRadius: '10px' }}>
+                                    <div style={{ fontSize: '16px', fontWeight: '600', color: '#2d3748' }}>{selectedRideDetails.distance?.toFixed(1)} km</div>
+                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Distance</div>
+                                </div>
+                                <div style={{ textAlign: 'center', padding: '15px', backgroundColor: '#f0f9ff', borderRadius: '10px' }}>
+                                    <div style={{ fontSize: '16px', fontWeight: '600', color: '#2d3748' }}>{selectedRideDetails.vehicle_type}</div>
+                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Vehicle</div>
+                                </div>
+                                <div style={{ textAlign: 'center', padding: '15px', backgroundColor: '#f0f9ff', borderRadius: '10px' }}>
+                                    <div style={{ fontSize: '16px', fontWeight: '600', color: '#2d3748' }}>{selectedRideDetails.payment_method}</div>
+                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Payment</div>
+                                </div>
+                            </div>
+                            
+                            {selectedRideDetails.driver_id && (
+                                <div style={{
+                                    padding: '15px',
+                                    backgroundColor: '#f8fafc',
+                                    borderRadius: '10px',
+                                    marginBottom: '20px'
+                                }}>
+                                    <h3 style={{ marginBottom: '10px', color: '#374151' }}>Driver</h3>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <div style={{
+                                            width: '40px',
+                                            height: '40px',
+                                            borderRadius: '50%',
+                                            backgroundColor: '#e2e8f0',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontSize: '18px'
+                                        }}>👨💼</div>
+                                        <div>
+                                            <div style={{ fontWeight: '600', color: '#2d3748' }}>{selectedRideDetails.driver_id.name}</div>
+                                            <div style={{ fontSize: '14px', color: '#64748b' }}>⭐ {selectedRideDetails.driver_id.rating || 'Not rated'}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            <div style={{ textAlign: 'center' }}>
+                                <button
+                                    onClick={() => setSelectedRideDetails(null)}
+                                    className="btn btn-primary"
+                                    style={{ padding: '12px 30px' }}
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 )}
                 
                 {/* Live Chat Support */}

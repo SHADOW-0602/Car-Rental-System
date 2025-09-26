@@ -55,6 +55,7 @@ exports.cookieAuth = async (req, res, next) => {
         
         next();
     } catch (error) {
-        return res.status(401).json({ success: false, error: error.message });
+        console.log('Auth error:', error.message);
+        return res.status(401).json({ success: false, error: 'Session expired. Please login again.' });
     }
 };

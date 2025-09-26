@@ -1,8 +1,8 @@
 const InvoiceService = require('../services/invoiceService');
-const FareCalculator = require('../services/fareService');
+const FareEstimationService = require('../services/trip-planning/fareEstimationService');
 
 const invoiceService = new InvoiceService();
-const fareCalculator = new FareCalculator();
+const fareEstimationService = new FareEstimationService();
 
 // Generate invoice for completed ride
 exports.generateInvoice = async (req, res) => {
@@ -78,9 +78,14 @@ exports.submitFeedback = async (req, res) => {
 // Estimate fare for trip planning
 exports.estimateFare = async (req, res) => {
     try {
-        const { pickup_location, drop_location, vehicle_type = 'sedan' } = req.body;
+        const { pickup_location, drop_location, vehicle_type } = req.body;
         
-        const estimate = fareCalculator.estimateFare(pickup_location, drop_location, vehicle_type);
+        const vehicleTypes = vehicle_type ? [vehicle_type] : null;
+        const estimate = await fareEstimationService.getUpfrontPricing(
+            pickup_location, 
+            drop_location, 
+            vehicleTypes
+        );
         
         res.json({
             success: true,
@@ -103,7 +108,13 @@ exports.applyDiscount = async (req, res) => {
             ? validPromoCodes[promo_code] 
             : discount_percent || 0;
         
-        const discountedFare = fareCalculator.applyDiscount(fare_amount, discountPercent);
+        const discountAmount = Math.round((fare_amount * discountPercent) / 100);
+        const discountedFare = {
+            original_fare: fare_amount,
+            discount_percent: discountPercent,
+            discount_amount: discountAmount,
+            final_fare: fare_amount - discountAmount
+        };
         
         res.json({
             success: true,

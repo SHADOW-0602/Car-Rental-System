@@ -8,15 +8,26 @@ const paymentGateway = new PaymentGateway();
 
 // Initiate payment for a ride
 exports.initiatePayment = async (req, res) => {
+    console.log('=== PAYMENT INITIATION START ===');
+    console.log('Request method:', req.method);
+    console.log('Request URL:', req.url);
+    console.log('Request headers:', req.headers);
+    console.log('Request body:', req.body);
+    console.log('User:', req.user);
+    
     try {
         const { rideId, paymentMethod, amount, pickup_location, drop_location, vehicle_type, surge_multiplier } = req.body;
-        console.log('Payment initiation request:', { rideId, paymentMethod, amount, userId: req.user.id });
+        console.log('Payment initiation request - full body:', req.body);
+        console.log('Payment initiation request - extracted:', { rideId, paymentMethod, amount, userId: req.user?.id });
 
         let ride;
         
         if (rideId) {
             // Verify existing ride
             ride = await Ride.findById(rideId).populate('user_id', 'name email phone');
+            console.log('Payment initiation - Ride found:', !!ride);
+            console.log('Payment initiation - Ride user ID:', ride?.user_id?._id?.toString());
+            console.log('Payment initiation - Request user ID:', req.user.id);
             
             if (!ride) {
                 return res.status(404).json({
@@ -26,6 +37,7 @@ exports.initiatePayment = async (req, res) => {
             }
             
             if (ride.user_id._id.toString() !== req.user.id) {
+                console.log('Payment initiation - Authorization failed');
                 return res.status(403).json({
                     success: false,
                     error: 'Unauthorized access to this ride'
@@ -47,10 +59,10 @@ exports.initiatePayment = async (req, res) => {
             await ride.save();
         }
 
-        // Check if payment already exists
+        // Check if payment already completed
         const existingPayment = await Payment.findOne({ 
             ride_id: rideId, 
-            status: { $in: ['completed', 'processing'] }
+            status: 'completed'
         });
 
         if (existingPayment) {
@@ -61,7 +73,7 @@ exports.initiatePayment = async (req, res) => {
         }
 
         let gatewayResponse;
-        const receipt = `ride_${rideId}_${Date.now()}`;
+        const receipt = `ride_${Date.now()}`.substring(0, 40);
 
         // Create payment order based on method
         switch (paymentMethod) {
@@ -69,13 +81,15 @@ exports.initiatePayment = async (req, res) => {
                 gatewayResponse = await paymentGateway.createRazorpayOrder(amount, 'INR', receipt);
                 break;
             case 'stripe':
-                gatewayResponse = await paymentGateway.createStripeCheckoutSession(amount, 'usd', {
+                gatewayResponse = await paymentGateway.createStripeCheckoutSession(amount, 'inr', {
                     ride_id: rideId,
                     user_id: req.user.id
                 });
                 break;
             case 'paypal':
-                gatewayResponse = await paymentGateway.createPayPalOrder(amount, 'USD');
+                // Convert INR to USD (approximate rate: 1 USD = 83 INR)
+                const usdAmount = (amount / 83).toFixed(2);
+                gatewayResponse = await paymentGateway.createPayPalOrder(parseFloat(usdAmount), 'USD');
                 break;
             default:
                 return res.status(400).json({
@@ -85,9 +99,10 @@ exports.initiatePayment = async (req, res) => {
         }
 
         if (!gatewayResponse.success) {
+            console.log('Gateway response failed:', gatewayResponse);
             return res.status(400).json({
                 success: false,
-                error: gatewayResponse.error
+                error: gatewayResponse.error || 'Payment gateway error'
             });
         }
 
@@ -118,6 +133,9 @@ exports.initiatePayment = async (req, res) => {
             gateway_response: gatewayResponse
         });
     } catch (err) {
+        console.error('=== PAYMENT INITIATION ERROR ===');
+        console.error('Error:', err);
+        console.error('Stack:', err.stack);
         res.status(500).json({ success: false, error: err.message });
     }
 };
@@ -181,13 +199,30 @@ exports.verifyPayment = async (req, res) => {
             payment.transaction_details.completed_at = new Date();
             
             // Update ride payment status
-            await Ride.findByIdAndUpdate(payment.ride_id, {
+            const ride = await Ride.findByIdAndUpdate(payment.ride_id, {
                 payment_status: 'paid'
-            });
+            }, { new: true }).populate('driver_id user_id', 'name');
+            
+            // Notify driver that payment is received
+            const io = req.app.get('io');
+            if (io && ride && ride.driver_id) {
+                io.emit(`driver_notification_${ride.driver_id._id}`, {
+                    type: 'payment_received',
+                    rideId: payment.ride_id,
+                    message: `Payment of ₹${payment.amount} received from ${ride.user_id.name}. You can now end the ride.`,
+                    amount: payment.amount,
+                    timestamp: new Date()
+                });
+            }
         } else {
             payment.status = 'failed';
             payment.transaction_details.failed_at = new Date();
             payment.transaction_details.failure_reason = verificationResult.error || 'Payment verification failed';
+            
+            // Update ride payment status to failed
+            await Ride.findByIdAndUpdate(payment.ride_id, {
+                payment_status: 'failed'
+            });
         }
 
         await payment.save();
@@ -310,6 +345,45 @@ exports.processRefund = async (req, res) => {
                 error: refundResult.error
             });
         }
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+// Verify Stripe session
+exports.verifyStripeSession = async (req, res) => {
+    try {
+        const { session_id } = req.body;
+        
+        const payment = await Payment.findOne({
+            'gateway_details.session_id': session_id
+        });
+        
+        if (!payment) {
+            return res.status(404).json({
+                success: false,
+                error: 'Payment session not found'
+            });
+        }
+        
+        const verificationResult = await paymentGateway.confirmStripeSession(session_id);
+        
+        if (verificationResult.success) {
+            payment.status = 'completed';
+            payment.transaction_details.completed_at = new Date();
+            
+            // Update ride payment status
+            await Ride.findByIdAndUpdate(payment.ride_id, {
+                payment_status: 'paid'
+            });
+            
+            await payment.save();
+        }
+        
+        res.json({
+            success: verificationResult.success,
+            payment_status: payment.status
+        });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

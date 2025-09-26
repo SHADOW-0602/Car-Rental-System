@@ -186,7 +186,7 @@ userSchema.virtual('completionPercentage').get(function() {
 });
 
 // Index for better query performance
-userSchema.index({ email: 1 });
+// Note: email index is created automatically by unique: true
 userSchema.index({ 'accountStatus.isActive': 1 });
 userSchema.index({ 'accountStatus.lastLoginAt': -1 });
 userSchema.index({ createdAt: -1 });

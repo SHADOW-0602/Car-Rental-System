@@ -70,37 +70,31 @@ router.get('/:id', auth, async (req, res) => {
 // Helper function to get fare by vehicle type
 function getFareByType(vehicleType) {
   const fares = {
-    economy: 12,
-    suv: 18,
-    luxury: 25,
+    bike: 8,
     sedan: 15,
-    hatchback: 10
+    suv: 25
   };
-  return fares[vehicleType] || 12;
+  return fares[vehicleType] || 15;
 }
 
 // Helper function to get vehicle features
 function getVehicleFeatures(vehicleType) {
   const features = {
-    economy: ['Air Conditioning', 'GPS Navigation', 'Music System'],
-    suv: ['Air Conditioning', 'GPS Navigation', 'Music System', 'Extra Space', 'Power Windows'],
-    luxury: ['Premium Interior', 'Climate Control', 'Premium Sound', 'Leather Seats', 'WiFi'],
+    bike: ['Helmet Provided', 'GPS Navigation', 'Quick Travel'],
     sedan: ['Air Conditioning', 'GPS Navigation', 'Music System', 'Comfortable Seating'],
-    hatchback: ['Air Conditioning', 'GPS Navigation', 'Fuel Efficient']
+    suv: ['Air Conditioning', 'GPS Navigation', 'Music System', 'Extra Space', 'Power Windows']
   };
-  return features[vehicleType] || features.economy;
+  return features[vehicleType] || features.sedan;
 }
 
 // Helper function to get vehicle description
 function getVehicleDescription(vehicleType) {
   const descriptions = {
-    economy: 'Perfect for city rides and daily commutes. Affordable and reliable.',
-    suv: 'Spacious and comfortable for family trips and group travel.',
-    luxury: 'Premium experience with top-notch amenities and comfort.',
+    bike: 'Quick and affordable rides for solo travel. Perfect for beating traffic.',
     sedan: 'Comfortable and stylish for business and leisure travel.',
-    hatchback: 'Compact and fuel-efficient for short distance travel.'
+    suv: 'Spacious and comfortable for family trips and group travel.'
   };
-  return descriptions[vehicleType] || descriptions.economy;
+  return descriptions[vehicleType] || descriptions.sedan;
 }
 
 module.exports = router;

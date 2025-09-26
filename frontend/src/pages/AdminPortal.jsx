@@ -47,10 +47,14 @@ export default function AdminPortal() {
         loadActiveTrips();
         loadSystemStats();
         
-        const newSocket = io('http://localhost:5000');
+        const newSocket = io('http://localhost:5000', {
+            auth: {
+                token: localStorage.getItem('token') || document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1]
+            }
+        });
         
         newSocket.on('connect', () => {
-            console.log('Admin connected to server');
+            console.log('Admin connected to server with auth');
             // Join admin room for admin-specific updates
             newSocket.emit('joinAdminRoom');
         });
@@ -407,14 +411,7 @@ export default function AdminPortal() {
                         <div className="stat-description">Earnings today</div>
                     </div>
                     
-                    <div className="stat-card rating">
-                        <div className="stat-header">
-                            <div className="stat-icon">⭐</div>
-                            <div className="stat-label">AVERAGE RATING</div>
-                        </div>
-                        <div className="stat-value yellow">{systemStats.averageRating}/5</div>
-                        <div className="stat-description">Platform rating</div>
-                    </div>
+
                     
                     <div className="stat-card completion">
                         <div className="stat-header">
@@ -429,6 +426,7 @@ export default function AdminPortal() {
                 <div className="admin-nav">
                     {[
                         { id: 'trips', label: '🗺️ Live Monitoring', priority: true },
+                        { id: 'history', label: '📋 Ride History', count: trips.length },
                         { id: 'operations', label: '📊 Operations Analytics', priority: true },
                         { id: 'drivers', label: '🚕 Drivers', count: drivers.length },
                         { id: 'users', label: '👥 Users', count: users.length },
@@ -521,8 +519,8 @@ export default function AdminPortal() {
                                                     <div><strong>Last Login:</strong> {user.accountStatus?.lastLoginAt ? new Date(user.accountStatus.lastLoginAt).toLocaleString() : 'Never'}</div>
                                                 </div>
                                                 <div style={{ display: 'flex', gap: '15px', fontSize: '14px' }}>
-                                                    <div><strong>Total Rides:</strong> {user.totalRides || 0}</div>
-                                                    <div><strong>Total Spent:</strong> ₹{user.totalSpent || 0}</div>
+                                                    <div><strong>Total Rides:</strong> {trips.filter(t => t.user_id?._id === user._id).length}</div>
+                                                    <div><strong>Total Spent:</strong> ₹{trips.filter(t => t.user_id?._id === user._id && t.status === 'completed').reduce((sum, t) => sum + (t.fare || 0), 0)}</div>
                                                     <div><strong>Account Age:</strong> {Math.floor((new Date() - new Date(user.createdAt)) / (1000 * 60 * 60 * 24))} days</div>
                                                 </div>
                                             </div>
@@ -616,12 +614,12 @@ export default function AdminPortal() {
                                                     <div><strong>Email:</strong> {driver.email}</div>
                                                     <div><strong>Phone:</strong> {driver.phone}</div>
                                                     <div><strong>Registered:</strong> {new Date(driver.createdAt).toLocaleString()}</div>
-                                                    <div><strong>Experience:</strong> {driver.driverInfo?.drivingExperience || 'N/A'}</div>
+                                                    <div><strong>Experience:</strong> {driver.experience || driver.driverInfo?.drivingExperience || '2 years'}</div>
                                                 </div>
                                                 <div style={{ display: 'flex', gap: '15px', fontSize: '14px' }}>
                                                     <div><strong>Rating:</strong> {driver.rating || 0}/5 ⭐</div>
                                                     <div><strong>Completed Rides:</strong> {driver.completedRides || 0}</div>
-                                                    <div><strong>Total Earnings:</strong> ₹{driver.earnings?.total || 0}</div>
+                                                    <div><strong>Total Earnings:</strong> ₹{trips.filter(t => t.driver_id?._id === driver._id && t.status === 'completed').reduce((sum, t) => sum + (t.fare || 0), 0)}</div>
                                                 </div>
                                             </div>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'end' }}>
@@ -1416,6 +1414,122 @@ export default function AdminPortal() {
                     </div>
                 )}
 
+                {activeTab === 'history' && (
+                    <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '15px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
+                            <h2 style={{ margin: 0, color: '#1e293b' }}>📋 Ride History</h2>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                                <span style={{ color: '#64748b', fontSize: '14px' }}>Total Rides: {trips.length}</span>
+                                <button 
+                                    onClick={loadTrips}
+                                    style={{
+                                        padding: '8px 16px',
+                                        backgroundColor: '#667eea',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        fontSize: '12px'
+                                    }}
+                                >
+                                    🔄 Refresh
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {trips.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#64748b' }}>
+                                <div style={{ fontSize: '64px', marginBottom: '20px' }}>📋</div>
+                                <h3 style={{ color: '#2d3748', marginBottom: '10px' }}>No Ride History</h3>
+                                <p>Completed rides will appear here for review.</p>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'grid', gap: '15px' }}>
+                                {trips.map(trip => (
+                                    <div key={trip._id} style={{
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '12px',
+                                        padding: '20px',
+                                        backgroundColor: '#fafafa'
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '15px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                                <div style={{
+                                                    width: '40px',
+                                                    height: '40px',
+                                                    borderRadius: '50%',
+                                                    backgroundColor: trip.status === 'completed' ? '#22c55e' : 
+                                                                   trip.status === 'cancelled' ? '#ef4444' : '#f59e0b',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    fontSize: '18px',
+                                                    color: 'white'
+                                                }}>
+                                                    {trip.status === 'completed' ? '✅' : 
+                                                     trip.status === 'cancelled' ? '❌' : '🚗'}
+                                                </div>
+                                                <div>
+                                                    <h3 style={{ margin: '0 0 5px 0', color: '#1e293b' }}>
+                                                        Trip #{trip._id.slice(-6).toUpperCase()}
+                                                    </h3>
+                                                    <div style={{ display: 'flex', gap: '15px', fontSize: '14px', color: '#64748b' }}>
+                                                        <span>👤 {trip.user_id?.name || 'Unknown User'}</span>
+                                                        <span>🚕 {trip.driver_id?.name || 'Unknown Driver'}</span>
+                                                        <span>🚗 {trip.vehicle_type?.toUpperCase()}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div style={{ textAlign: 'right' }}>
+                                                <div style={{
+                                                    padding: '4px 8px',
+                                                    borderRadius: '12px',
+                                                    fontSize: '12px',
+                                                    fontWeight: '600',
+                                                    backgroundColor: trip.status === 'completed' ? '#dcfce7' : 
+                                                                   trip.status === 'cancelled' ? '#fee2e2' : '#fef3c7',
+                                                    color: trip.status === 'completed' ? '#16a34a' : 
+                                                           trip.status === 'cancelled' ? '#dc2626' : '#d97706'
+                                                }}>
+                                                    {trip.status?.toUpperCase()}
+                                                </div>
+                                                <div style={{ fontSize: '16px', fontWeight: '700', color: '#22c55e', marginTop: '5px' }}>
+                                                    ₹{trip.fare || 0}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', marginBottom: '15px' }}>
+                                            <div style={{ padding: '10px', backgroundColor: '#f0fdf4', borderRadius: '8px' }}>
+                                                <div style={{ fontSize: '12px', color: '#16a34a', fontWeight: '600', marginBottom: '3px' }}>📍 PICKUP</div>
+                                                <div style={{ fontSize: '13px', color: '#1e293b' }}>
+                                                    {trip.pickup_location?.address || 'Location not specified'}
+                                                </div>
+                                            </div>
+                                            <div style={{ padding: '10px', backgroundColor: '#fef2f2', borderRadius: '8px' }}>
+                                                <div style={{ fontSize: '12px', color: '#dc2626', fontWeight: '600', marginBottom: '3px' }}>🎯 DROP-OFF</div>
+                                                <div style={{ fontSize: '13px', color: '#1e293b' }}>
+                                                    {trip.drop_location?.address || 'Location not specified'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: 'white', borderRadius: '8px' }}>
+                                            <div style={{ display: 'flex', gap: '15px', fontSize: '13px' }}>
+                                                <div><strong>Distance:</strong> {trip.distance?.toFixed(1) || 0} km</div>
+                                                <div><strong>Date:</strong> {new Date(trip.createdAt).toLocaleDateString()}</div>
+                                                <div><strong>Time:</strong> {new Date(trip.createdAt).toLocaleTimeString()}</div>
+                                                <div><strong>Payment:</strong> {trip.payment_method === 'cash' ? '💵 Cash' : '💳 Online'}</div>
+                                                <div><strong>Status:</strong> {trip.payment_status || 'pending'}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {activeTab === 'operations' && (
                     <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '15px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
                         <OperationsAnalytics />
@@ -1507,7 +1621,7 @@ export default function AdminPortal() {
                                     <div style={{ display: 'grid', gap: '10px' }}>
                                         <div><strong>License Number:</strong> {selectedDriver.driverInfo?.licenseNumber || 'N/A'}</div>
                                         <div><strong>Vehicle Type:</strong> {selectedDriver.driverInfo?.vehicleType || 'N/A'}</div>
-                                        <div><strong>Experience:</strong> {selectedDriver.driverInfo?.drivingExperience || 'N/A'}</div>
+                                        <div><strong>Experience:</strong> {selectedDriver.experience || selectedDriver.driverInfo?.drivingExperience || '2 years'}</div>
                                         <div><strong>Documents:</strong> 
                                             <span style={{
                                                 marginLeft: '8px',
@@ -1528,9 +1642,27 @@ export default function AdminPortal() {
                                     <h3 style={{ margin: '0 0 15px 0', color: '#1e293b' }}>Performance</h3>
                                     <div style={{ display: 'grid', gap: '10px' }}>
                                         <div><strong>Rating:</strong> {selectedDriver.rating || 0}/5 ⭐</div>
-                                        <div><strong>Completed Rides:</strong> {selectedDriver.completedRides || 0}</div>
-                                        <div><strong>Total Earnings:</strong> ₹{selectedDriver.earnings?.total || 0}</div>
-                                        <div><strong>This Month:</strong> ₹{selectedDriver.earnings?.thisMonth || 0}</div>
+                                        <div><strong>Completed Rides:</strong> {trips.filter(t => t.driver_id?._id === selectedDriver._id && t.status === 'completed').length}</div>
+                                        <div><strong>Cancelled Rides:</strong> {trips.filter(t => t.driver_id?._id === selectedDriver._id && t.status === 'cancelled').length}</div>
+                                        <div><strong>Total Rides:</strong> {trips.filter(t => t.driver_id?._id === selectedDriver._id).length}</div>
+                                        <div><strong>Success Rate:</strong> {(() => {
+                                            const driverTrips = trips.filter(t => t.driver_id?._id === selectedDriver._id);
+                                            const completed = driverTrips.filter(t => t.status === 'completed').length;
+                                            return driverTrips.length > 0 ? Math.round((completed / driverTrips.length) * 100) : 0;
+                                        })()}%</div>
+                                        <div><strong>Total Earnings:</strong> ₹{trips.filter(t => t.driver_id?._id === selectedDriver._id && t.status === 'completed').reduce((sum, t) => sum + (t.fare || 0), 0)}</div>
+                                        <div><strong>Average Fare:</strong> ₹{(() => {
+                                            const completedTrips = trips.filter(t => t.driver_id?._id === selectedDriver._id && t.status === 'completed');
+                                            const totalFare = completedTrips.reduce((sum, t) => sum + (t.fare || 0), 0);
+                                            return completedTrips.length > 0 ? Math.round(totalFare / completedTrips.length) : 0;
+                                        })()}</div>
+                                        <div><strong>This Month Rides:</strong> {trips.filter(t => {
+                                            const tripDate = new Date(t.createdAt);
+                                            const now = new Date();
+                                            return t.driver_id?._id === selectedDriver._id && 
+                                                   tripDate.getMonth() === now.getMonth() && 
+                                                   tripDate.getFullYear() === now.getFullYear();
+                                        }).length}</div>
                                     </div>
                                 </div>
 
@@ -1571,8 +1703,7 @@ export default function AdminPortal() {
                                         </button>
                                     </div>
                                     <div style={{ display: 'grid', gap: '10px' }}>
-                                        <div><strong>Current Location:</strong> {selectedDriver.location?.address || selectedDriver.currentLocation?.address || (selectedDriver.location?.latitude && selectedDriver.location?.longitude ? `${selectedDriver.location.latitude.toFixed(4)}, ${selectedDriver.location.longitude.toFixed(4)}` : 'Location not shared')}</div>
-                                        <div><strong>Coordinates:</strong> {selectedDriver.location?.latitude && selectedDriver.location?.longitude ? `${selectedDriver.location.latitude.toFixed(6)}, ${selectedDriver.location.longitude.toFixed(6)}` : 'Not available'}</div>
+                                        <div><strong>Current Location:</strong> {selectedDriver.location?.address || selectedDriver.currentLocation?.address || 'Unknown Location'}</div>
                                         <div><strong>Last Updated:</strong> {selectedDriver.location?.updatedAt ? new Date(selectedDriver.location.updatedAt).toLocaleString() : selectedDriver.currentLocation?.timestamp ? new Date(selectedDriver.currentLocation.timestamp).toLocaleString() : 'Never'}</div>
                                         <div><strong>Location Status:</strong> 
                                             <span style={{
@@ -1778,8 +1909,8 @@ export default function AdminPortal() {
                                         <div><strong>Joined:</strong> {new Date(selectedUser.createdAt).toLocaleDateString()}</div>
                                         <div><strong>Last Login:</strong> {selectedUser.accountStatus?.lastLoginAt ? new Date(selectedUser.accountStatus.lastLoginAt).toLocaleString() : 'Never'}</div>
                                         <div><strong>Account Age:</strong> {Math.floor((new Date() - new Date(selectedUser.createdAt)) / (1000 * 60 * 60 * 24))} days</div>
-                                        <div><strong>Total Rides:</strong> {selectedUser.totalRides || 0}</div>
-                                        <div><strong>Total Spent:</strong> ₹{selectedUser.totalSpent || 0}</div>
+                                        <div><strong>Total Rides:</strong> {trips.filter(t => t.user_id?._id === selectedUser._id).length}</div>
+                                        <div><strong>Total Spent:</strong> ₹{trips.filter(t => t.user_id?._id === selectedUser._id && t.status === 'completed').reduce((sum, t) => sum + (t.fare || 0), 0)}</div>
                                         <div><strong>Average Rating:</strong> {selectedUser.averageRating || 'N/A'}/5 ⭐</div>
                                     </div>
                                 </div>

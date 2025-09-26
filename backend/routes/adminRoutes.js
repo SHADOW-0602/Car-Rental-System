@@ -39,7 +39,7 @@ router.get('/users', auth, role(['admin']), async (req, res) => {
 router.get('/drivers', auth, role(['admin']), async (req, res) => {
   try {
     const drivers = await Driver.find({}, { password: 0 }).sort({ createdAt: -1 });
-    console.log('Backend - Returning drivers:', drivers.map(d => ({ id: d._id.toString(), name: d.name, status: d.status })));
+
     res.json({ success: true, drivers });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -331,28 +331,21 @@ router.post('/reject-driver/:userId', auth, role(['admin']), async (req, res) =>
 // Verification request routes
 router.get('/verification-requests', auth, role(['admin']), async (req, res) => {
   try {
-    // Find drivers who have actually submitted verification documents
+    // Only show drivers who have explicitly submitted verification requests with documents
     const requests = await Driver.find({
       $and: [
+        // Must have a verification request that was submitted
+        { 'verificationRequest.status': 'pending' },
+        { 'verificationRequest.submittedAt': { $exists: true } },
+        // Must not be verified yet
+        { 'driverInfo.isVerified': false },
+        // Must have uploaded at least one document
         {
           $or: [
-            { 'driverInfo.isVerified': false },
-            { 'driverInfo.isVerified': { $exists: false } }
-          ]
-        },
-        {
-          $or: [
-            { 'verificationRequest.status': 'pending' },
-            { 'verificationRequest.status': { $exists: false } }
-          ]
-        },
-        {
-          // Only show drivers who have uploaded at least one document
-          $or: [
-            { 'driverInfo.documents.licensePhoto': { $exists: true, $ne: null } },
-            { 'driverInfo.documents.vehicleRC': { $exists: true, $ne: null } },
-            { 'driverInfo.documents.insurance': { $exists: true, $ne: null } },
-            { 'driverInfo.documents.profilePhoto': { $exists: true, $ne: null } }
+            { 'driverInfo.documents.licensePhoto': { $exists: true, $ne: null, $ne: '' } },
+            { 'driverInfo.documents.vehicleRC': { $exists: true, $ne: null, $ne: '' } },
+            { 'driverInfo.documents.insurance': { $exists: true, $ne: null, $ne: '' } },
+            { 'driverInfo.documents.profilePhoto': { $exists: true, $ne: null, $ne: '' } }
           ]
         }
       ]
@@ -363,9 +356,9 @@ router.get('/verification-requests', auth, role(['admin']), async (req, res) => 
       driverInfo: 1, 
       verificationRequest: 1,
       createdAt: 1 
-    }).sort({ createdAt: -1 });
+    }).sort({ 'verificationRequest.submittedAt': -1 });
     
-    console.log('Verification requests found:', requests.length);
+
     res.json(requests);
   } catch (error) {
     console.error('Error fetching verification requests:', error);
@@ -479,6 +472,58 @@ router.get('/drivers/:driverId', auth, role(['admin']), async (req, res) => {
   }
 });
 
+// Get driver location (admin only)
+router.get('/drivers/:driverId/location', auth, role(['admin']), async (req, res) => {
+  try {
+    const driverId = req.params.driverId;
+    
+    // First try to get from database
+    const dbDriver = await Driver.findById(driverId);
+    if (dbDriver && dbDriver.location && dbDriver.location.latitude && dbDriver.location.longitude) {
+      return res.json({
+        success: true,
+        location: {
+          latitude: dbDriver.location.latitude,
+          longitude: dbDriver.location.longitude,
+          address: dbDriver.location.address || 'Delhi, India',
+          updatedAt: dbDriver.lastLocationUpdate || dbDriver.updatedAt
+        }
+      });
+    }
+    
+    // Try to get from location file
+    const { parseDriverLocationFile } = require('../services/locationService');
+    const drivers = await parseDriverLocationFile();
+    const fileDriver = drivers.find(d => d.driverId === driverId);
+    
+    if (fileDriver) {
+      return res.json({
+        success: true,
+        location: {
+          latitude: fileDriver.latitude,
+          longitude: fileDriver.longitude,
+          address: fileDriver.address,
+          updatedAt: fileDriver.timestamp
+        }
+      });
+    }
+    
+    // Fallback to default Delhi location
+    res.json({
+      success: true,
+      location: {
+        latitude: 28.6139,
+        longitude: 77.2090,
+        address: 'Delhi, India',
+        updatedAt: new Date()
+      }
+    });
+  } catch (error) {
+    console.error('Error getting driver location:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Update driver settings (admin only)
 router.put('/drivers/:driverId/settings', auth, role(['admin']), async (req, res) => {
   try {
@@ -503,7 +548,7 @@ router.put('/drivers/:driverId/settings', auth, role(['admin']), async (req, res
   }
 });
 
-console.log('Driver settings route registered');
+console.log('Driver settings and location routes registered');
 
 
 

@@ -1,10 +1,10 @@
-const TrackingService = require('../services/TrackingService');
+const TripTrackingService = require('../services/trip-execution/tripTrackingService');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Driver = require('../models/Driver');
 
 module.exports = (io) => {
-    const trackingService = new TrackingService(io);
+    const trackingService = new TripTrackingService(io);
 
     // Socket authentication middleware
     io.use(async (socket, next) => {

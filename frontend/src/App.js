@@ -44,6 +44,8 @@ import DriverPortal from './pages/DriverPortal';
 import AdminPortal from './pages/AdminPortal';
 import AdminUsers from './pages/AdminUsers';
 import TrackRide from './pages/TrackRide';
+import PaymentSuccess from './pages/PaymentSuccess';
+import PaymentCancel from './pages/PaymentCancel';
 
 import ProtectedRoute from './components/ProtectedRoute';
 import MultiTabApp from './components/MultiTabApp';
@@ -125,6 +127,8 @@ function AppRoutes() {
           <Route path="/business" element={<Business />} />
           <Route path="/gift-cards" element={<GiftCards />} />
           <Route path="/accessibility" element={<Accessibility />} />
+          <Route path="/payment-success" element={<PaymentSuccess />} />
+          <Route path="/payment-cancel" element={<PaymentCancel />} />
           
           {/* Multi-Tab System */}
           <Route path="/multi-tab" element={<MultiTabApp />} />

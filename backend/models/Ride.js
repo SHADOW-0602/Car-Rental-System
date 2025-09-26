@@ -29,7 +29,7 @@ const rideSchema = new mongoose.Schema({
     },
     status: { 
         type: String, 
-        enum: ['requested', 'searching', 'accepted', 'driver_arriving', 'in_progress', 'completed', 'cancelled'], 
+        enum: ['requested', 'searching', 'accepted', 'driver_arrived', 'driver_arriving', 'in_progress', 'completed', 'cancelled', 'emergency_stopped'], 
         default: 'searching' 
     },
     payment_status: {
@@ -81,7 +81,25 @@ const rideSchema = new mongoose.Schema({
     search_timeout: { type: Date },
     driver_search_radius: { type: Number, default: 10 }, // km
     surge_multiplier: { type: Number, default: 1.0 },
+    demandMultiplier: { type: Number, default: 1.0 },
+    promoApplied: {
+        code: String,
+        discount: Number,
+        originalFare: Number,
+        finalFare: Number
+    },
+    actualFare: Number,
+    actualDistance: Number,
+    actualTime: Number, // in minutes
+    potentialDrivers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Driver' }],
+    broadcastAt: Date,
+    emergencyReason: String,
+    emergencyStoppedAt: Date,
     declined_by: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Track which drivers declined
+    rating: { type: Number, min: 1, max: 5 }, // Driver rating by user
+    feedback: { type: String }, // Driver feedback by user
+    user_rating: { type: Number, min: 1, max: 5 }, // User rating by driver
+    user_feedback: { type: String }, // User feedback by driver
     timestamps: {
         createdAt: { type: Date, default: Date.now },
         accepted_at: Date,

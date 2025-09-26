@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 
-import RatingSystem from '../components/RatingSystem';
+import EnhancedRatingSystem from '../components/EnhancedRatingSystem';
 
 import { useAuthContext } from '../context/AuthContext';
 
@@ -121,7 +121,7 @@ export default function TrackRide() {
         {/* Rating System */}
         {showRating && (
           <div style={{ marginTop: '30px' }}>
-            <RatingSystem 
+            <EnhancedRatingSystem 
               rideId={rideId} 
               userRole={user?.role} 
               onRatingComplete={handleRatingComplete}

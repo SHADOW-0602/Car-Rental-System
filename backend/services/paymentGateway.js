@@ -21,6 +21,13 @@ class PaymentGateway {
     // Razorpay Integration
     async createRazorpayOrder(amount, currency = 'INR', receipt) {
         try {
+            console.log('Creating Razorpay order:', { amount, currency, receipt });
+            console.log('Razorpay keys:', { key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET ? 'SET' : 'NOT SET' });
+            
+            if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+                throw new Error('Razorpay credentials not configured');
+            }
+            
             const options = {
                 amount: amount * 100, // Convert to paise
                 currency,
@@ -29,6 +36,8 @@ class PaymentGateway {
             };
 
             const order = await this.razorpay.orders.create(options);
+            console.log('Razorpay order created:', order);
+            
             return {
                 success: true,
                 order_id: order.id,
@@ -37,9 +46,10 @@ class PaymentGateway {
                 key_id: process.env.RAZORPAY_KEY_ID
             };
         } catch (error) {
+            console.error('Razorpay order creation failed:', error);
             return {
                 success: false,
-                error: error.message
+                error: error.message || 'Razorpay order creation failed'
             };
         }
     }
@@ -67,7 +77,7 @@ class PaymentGateway {
     }
 
     // Stripe Integration
-    async createStripeCheckoutSession(amount, currency = 'usd', metadata = {}) {
+    async createStripeCheckoutSession(amount, currency = 'inr', metadata = {}) {
         try {
             const session = await this.stripe.checkout.sessions.create({
                 payment_method_types: ['card'],

@@ -1,12 +1,12 @@
 const Invoice = require('../models/Invoice');
 const Ride = require('../models/Ride');
-const FareCalculator = require('./fareService');
-const RatingService = require('./ratingService');
+const FareEstimationService = require('./trip-planning/fareEstimationService');
+const RatingFeedbackService = require('./post-trip/ratingFeedbackService');
 
 class InvoiceService {
     constructor() {
-        this.fareCalculator = new FareCalculator();
-        this.ratingService = new RatingService();
+        this.fareEstimationService = new FareEstimationService();
+        this.ratingService = new RatingFeedbackService();
     }
 
     // Generate invoice for completed ride
@@ -34,19 +34,27 @@ class InvoiceService {
             // Get vehicle type from driver info
             const vehicleType = ride.driver_id?.driverInfo?.vehicleType || 'sedan';
 
-            // Calculate fare
-            const fareDetails = this.fareCalculator.calculateFare(
-                ride.distance,
-                duration,
-                vehicleType,
-                ride.timestamps?.completed_at || new Date()
-            );
+            // Calculate fare using existing ride data or estimate
+            const baseFare = ride.fare || ride.estimatedFare || 100;
+            const fareDetails = {
+                base_fare: Math.round(baseFare * 0.4) || 40,
+                distance_fare: Math.round(baseFare * 0.4) || 40,
+                time_fare: Math.round(baseFare * 0.15) || 15,
+                surge_multiplier: ride.surge_multiplier || 1.0,
+                tax: Math.round(baseFare * 0.05) || 5,
+                total_fare: baseFare
+            };
 
-            // Create invoice
+            // Generate invoice number
+            const invoiceNumber = `INV-${Date.now()}-${rideId.slice(-6)}`;
+            
+            // Create invoice with payment status
             const invoice = new Invoice({
+                invoice_number: invoiceNumber,
                 ride_id: rideId,
                 user_id: ride.user_id._id,
                 driver_id: ride.driver_id._id,
+                payment_status: ride.payment_status || 'pending',
                 
                 fare_breakdown: {
                     base_fare: fareDetails.base_fare,
@@ -93,6 +101,7 @@ class InvoiceService {
         }
 
         return {
+            _id: invoice._id.toString(),
             invoice_number: invoice.invoice_number,
             date: invoice.createdAt,
             
@@ -117,14 +126,14 @@ class InvoiceService {
 
     // Submit feedback (legacy - redirects to rating service)
     async submitFeedback(invoiceId, rating, comment) {
-        const invoice = await Invoice.findById(invoiceId);
+        const invoice = await Invoice.findById(invoiceId).populate('user_id');
         if (!invoice) {
             throw new Error('Invoice not found');
         }
 
-        // Use new rating system
-        const ratingData = { rating, comment };
-        await this.ratingService.submitRating(invoice.ride_id, invoice.user_id, ratingData);
+        // Use new rating system - pass the user ID as string
+        const ratingData = { rating, feedback: comment };
+        await this.ratingService.submitRating(invoice.ride_id, invoice.user_id._id.toString(), 'user', ratingData);
 
         // Update invoice feedback for backward compatibility
         invoice.feedback = {
