@@ -525,7 +525,7 @@ export default function UserPortal({ user: propUser }) {
                 <AnimatedContainer
                     variants={fadeIn}
                     style={{
-                        backgroundImage: 'url(/assets/background.jpg)',
+                        backgroundImage: `url(${process.env.PUBLIC_URL}/assets/background.jpg)`,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
                         color: 'white',
@@ -884,7 +884,7 @@ export default function UserPortal({ user: propUser }) {
                         >
                             <motion.div 
                                 whileHover={{ scale: 1.05 }}
-                                style={{ height: '200px', backgroundImage: 'url(/assets/Bike.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative', overflow: 'hidden' }}
+                                style={{ height: '200px', backgroundImage: `url(${process.env.PUBLIC_URL}/assets/bike.jpg)`, backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative', overflow: 'hidden' }}
                             >
                                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%)' }}></div>
                             </motion.div>
@@ -902,7 +902,7 @@ export default function UserPortal({ user: propUser }) {
                         >
                             <motion.div 
                                 whileHover={{ scale: 1.05 }}
-                                style={{ height: '200px', backgroundImage: 'url(/assets/Sedan.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative', overflow: 'hidden' }}
+                                style={{ height: '200px', backgroundImage: `url(${process.env.PUBLIC_URL}/assets/sedan.jpg)`, backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative', overflow: 'hidden' }}
                             >
                                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.3) 0%, rgba(22, 163, 74, 0.3) 100%)' }}></div>
                             </motion.div>
@@ -920,7 +920,7 @@ export default function UserPortal({ user: propUser }) {
                         >
                             <motion.div 
                                 whileHover={{ scale: 1.05 }}
-                                style={{ height: '200px', backgroundImage: 'url(/assets/SUV.jpg)', backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative', overflow: 'hidden' }}
+                                style={{ height: '200px', backgroundImage: `url(${process.env.PUBLIC_URL}/assets/SUV.jpg)`, backgroundSize: 'cover', backgroundPosition: 'center', position: 'relative', overflow: 'hidden' }}
                             >
                                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.3) 0%, rgba(217, 119, 6, 0.3) 100%)' }}></div>
                             </motion.div>
@@ -1328,13 +1328,13 @@ export default function UserPortal({ user: propUser }) {
                             </div>
                             <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
                                 <a href="https://www.linkedin.com/in/kushagra-singh-539542311/" target="_blank" rel="noopener noreferrer">
-                                    <img src="/assets/linkedin.png" alt="LinkedIn" style={{ width: '24px', height: '24px' }} />
+                                    <img src={`${process.env.PUBLIC_URL}/assets/linkedin.png`} alt="LinkedIn" style={{ width: '24px', height: '24px' }} />
                                 </a>
                                 <a href="https://x.com/Odin_Boi_0602" target="_blank" rel="noopener noreferrer">
-                                    <img src="/assets/twitter.png" alt="X" style={{ width: '24px', height: '24px' }} />
+                                    <img src={`${process.env.PUBLIC_URL}/assets/twitter.png`} alt="X" style={{ width: '24px', height: '24px' }} />
                                 </a>
                                 <a href="https://github.com/SHADOW-0602" target="_blank" rel="noopener noreferrer">
-                                    <img src="/assets/github.png" alt="GitHub" style={{ width: '24px', height: '24px' }} />
+                                    <img src={`${process.env.PUBLIC_URL}/assets/github.png`} alt="GitHub" style={{ width: '24px', height: '24px' }} />
                                 </a>
                             </div>
                         </div>
