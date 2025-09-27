@@ -1077,7 +1077,7 @@ export default function UserPortal({ user: propUser }) {
                             <motion.a 
                                 whileHover={{ scale: 1.05, boxShadow: '0 12px 35px rgba(34, 197, 94, 0.6)' }}
                                 whileTap={{ scale: 0.95 }}
-                                href="/driver/register" 
+                                href="/driver-register" 
                                 style={{
                                     padding: '18px 40px',
                                     backgroundColor: '#22c55e',

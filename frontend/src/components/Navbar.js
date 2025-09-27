@@ -124,7 +124,7 @@ export default function Navbar({ user }) {
         {!user && (
           <>
             <Link to="/about" style={linkStyle}>About</Link>
-            <Link to="/driver/register" style={linkStyle}>Become a driver</Link>
+            <Link to="/driver-register" style={linkStyle}>Become a driver</Link>
           </>
         )}
       </div>
@@ -411,6 +411,7 @@ export default function Navbar({ user }) {
           {!user && (
             <>
               <Link to="/about" style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>About</Link>
+              <Link to="/driver-register" style={linkStyle} onClick={() => setIsMobileMenuOpen(false)}>Become a driver</Link>
             </>
           )}
         </div>
@@ -433,7 +434,7 @@ export default function Navbar({ user }) {
                 border: '2px solid #0099ff'
               }}>Sign up</button>
             </Link>
-            <Link to="/driver/register" style={{ textDecoration: 'none' }} onClick={() => setIsMobileMenuOpen(false)}>
+            <Link to="/driver-register" style={{ textDecoration: 'none' }} onClick={() => setIsMobileMenuOpen(false)}>
               <button style={{
                 width: '100%',
                 padding: '14px 20px',

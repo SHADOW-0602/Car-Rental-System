@@ -754,15 +754,24 @@ export default function DriverPortal() {
                                     </div>
                                     
                                     <div style={{ display: 'flex', gap: '10px' }}>
-                                        {ride.status === 'accepted' && (
+                                        {(ride.status === 'accepted' || ride.status === 'driver_arrived') && (
                                             <button
                                                 onClick={() => {
                                                     setSelectedRideForOTP(ride);
                                                     setShowOTPModal(true);
                                                     setOtpInput('');
                                                 }}
-                                                className="btn btn-success"
-                                                style={{ flex: 1, padding: '12px' }}
+                                                style={{
+                                                    flex: 1,
+                                                    padding: '12px 20px',
+                                                    backgroundColor: '#22c55e',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    borderRadius: '10px',
+                                                    fontSize: '16px',
+                                                    fontWeight: '600',
+                                                    cursor: 'pointer'
+                                                }}
                                             >
                                                 🚀 Start Ride
                                             </button>
